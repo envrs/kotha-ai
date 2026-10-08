@@ -18,6 +18,8 @@ var (
 	serverCwd     string
 	serverDebug   bool
 	serverAPIKey  string
+	serverRate    float64
+	serverBurst   int
 	serverTimeout time.Duration
 	serverDaemon  bool
 	serverPIDFile string
@@ -51,6 +53,8 @@ Use the 'kotha api' subcommand to make requests to a running server.`,
 		if cfg.APIKey == "" {
 			cfg.APIKey = os.Getenv("KOTHA_API_KEY")
 		}
+		cfg.Rate = serverRate
+		cfg.Burst = serverBurst
 		if serverDaemon {
 			return runDaemon(cfg)
 		}
@@ -63,6 +67,8 @@ func init() {
 	Cmd.Flags().StringVar(&serverCwd, "cwd", "", "working directory")
 	Cmd.Flags().BoolVar(&serverDebug, "debug", false, "enable debug logging")
 	Cmd.Flags().StringVar(&serverAPIKey, "api-key", "", "require this API key on /v1 requests (env KOTHA_API_KEY)")
+	Cmd.Flags().Float64Var(&serverRate, "rate", DefaultServerConfig().Rate, "max requests per second per client IP on /v1 (0 disables)")
+	Cmd.Flags().IntVar(&serverBurst, "burst", DefaultServerConfig().Burst, "burst size for the per-IP request limiter")
 	Cmd.Flags().DurationVar(&serverTimeout, "timeout", DefaultServerConfig().Timeout, "request timeout")
 	Cmd.Flags().BoolVar(&serverDaemon, "daemon", false, "run as a background daemon")
 	Cmd.Flags().StringVar(&serverPIDFile, "pidfile", "", "write daemon PID to file")
@@ -79,7 +85,10 @@ func runDaemon(cfg ServerConfig) error {
 		return err
 	}
 	c := exec.Command(binary, "server", "--daemon=false",
-		"--addr", cfg.Addr, "--cwd", cfg.Cwd, "--timeout", cfg.Timeout.String())
+		"--addr", cfg.Addr, "--cwd", cfg.Cwd, "--timeout", cfg.Timeout.String(),
+		"--api-key", cfg.APIKey,
+		"--rate", fmt.Sprintf("%g", cfg.Rate),
+		"--burst", fmt.Sprintf("%d", cfg.Burst))
 	if cfg.Debug {
 		c.Args = append(c.Args, "--debug")
 	}

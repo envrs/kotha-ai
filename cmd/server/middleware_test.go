@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kothagpt/kotha/internal/ratelimit"
 )
 
 func authHandler() (http.Handler, *int) {
@@ -91,5 +93,47 @@ func TestAPIKeyAuthHealthzOpen(t *testing.T) {
 	rec := doReq(t, wrapped, "/healthz", nil)
 	if rec.Code != http.StatusOK || *calls != 1 {
 		t.Fatalf("healthz code=%d calls=%d", rec.Code, *calls)
+	}
+}
+
+func TestRateLimit429AfterBudget(t *testing.T) {
+	h, calls := authHandler()
+	// Tiny refill rate, capacity 1: exactly one request fits the bucket.
+	lims := ratelimit.NewRegistry(0.0001, 1)
+	wrapped := RateLimit(lims, h)
+
+	if rec := doReq(t, wrapped, "/v1/sessions", nil); rec.Code != http.StatusOK {
+		t.Fatalf("first request code=%d, want 200", rec.Code)
+	}
+	rec := doReq(t, wrapped, "/v1/sessions", nil)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request code=%d, want 429", rec.Code)
+	}
+	// Non-/v1 paths bypass the limiter.
+	if rec := doReq(t, wrapped, "/healthz", nil); rec.Code != http.StatusOK {
+		t.Fatalf("healthz code=%d, want 200", rec.Code)
+	}
+	if *calls != 2 {
+		t.Fatalf("handler calls=%d, want 2 (first + healthz)", *calls)
+	}
+}
+
+func TestRequestLogPassthrough(t *testing.T) {
+	h, calls := authHandler()
+	wrapped := RequestLog(h)
+	rec := doReq(t, wrapped, "/v1/sessions", nil)
+	if rec.Code != http.StatusOK || *calls != 1 {
+		t.Fatalf("code=%d calls=%d", rec.Code, *calls)
+	}
+}
+
+func TestStatusWriterCapturesStatus(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	sw := &statusWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
+	inner.ServeHTTP(sw, nil)
+	if sw.status != http.StatusTeapot {
+		t.Fatalf("status=%d, want 418", sw.status)
 	}
 }

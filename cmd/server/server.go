@@ -13,6 +13,7 @@ import (
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/db"
 	"github.com/kothagpt/kotha/internal/logging"
+	"github.com/kothagpt/kotha/internal/ratelimit"
 )
 
 // ServerConfig holds runtime configuration for the background server.
@@ -21,6 +22,8 @@ type ServerConfig struct {
 	Cwd     string
 	Debug   bool
 	APIKey  string
+	Rate    float64
+	Burst   int
 	Timeout time.Duration
 }
 
@@ -28,6 +31,8 @@ type ServerConfig struct {
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
 		Addr:    "127.0.0.1:8080",
+		Rate:    10,
+		Burst:   30,
 		Timeout: 30 * time.Second,
 	}
 }
@@ -83,9 +88,15 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	mux.HandleFunc("PUT /v1/models", srv.handleUpdateModel)
 	mux.HandleFunc("GET /healthz", srv.handleHealth)
 	mux.HandleFunc("POST /v1/stop", srv.handleStop)
+	var handler http.Handler = mux
+	handler = APIKeyAuth(cfg.APIKey, handler)
+	if cfg.Rate > 0 {
+		handler = RateLimit(ratelimit.NewRegistry(cfg.Rate, cfg.Burst), handler)
+	}
+	handler = RequestLog(handler)
 	srv.srv = &http.Server{
 		Addr:         cfg.Addr,
-		Handler:      APIKeyAuth(cfg.APIKey, mux),
+		Handler:      handler,
 		IdleTimeout:  cfg.Timeout,
 		ReadTimeout:  cfg.Timeout,
 		WriteTimeout: cfg.Timeout,
