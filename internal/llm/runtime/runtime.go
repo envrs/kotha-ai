@@ -14,9 +14,12 @@ type Chatter interface {
 
 // LoopConfig bounds the native agentic loop.
 type LoopConfig struct {
-	MaxTurns    int
-	Model       string
-	RequestOpts []schema.Option
+	MaxTurns int
+	Model    string
+	// ContextBudget, when > 0, trims the initial transcript to an
+	// approximate token budget before the first model call.
+	ContextBudget int64
+	RequestOpts   []schema.Option
 }
 
 func (c LoopConfig) maxTurns() int {
@@ -67,6 +70,12 @@ func WithModel(id string) func(*Runtime) {
 	return func(r *Runtime) { r.Config.Model = id }
 }
 
+// WithContextBudget trims the initial transcript to approximately
+// maxTokens (estimated) before the first model call.
+func WithContextBudget(maxTokens int64) func(*Runtime) {
+	return func(r *Runtime) { r.Config.ContextBudget = maxTokens }
+}
+
 func WithRequestOpts(opts ...schema.Option) func(*Runtime) {
 	return func(r *Runtime) { r.Config.RequestOpts = append(r.Config.RequestOpts, opts...) }
 }
@@ -79,7 +88,10 @@ func WithExecOptions(o ExecOptions) func(*Runtime) {
 // turn budget is exhausted. Tool results are appended as role=tool
 // messages so the transcript stays canonical.
 func (r *Runtime) Run(ctx context.Context, messages []schema.Message) (TurnResult, error) {
-	transcript := append([]schema.Message(nil), messages...)
+	transcript, _ := TrimToBudget(
+		append([]schema.Message(nil), messages...),
+		r.Config.ContextBudget,
+	)
 	toolDefs := r.Registry.Definitions()
 	opts := append([]schema.Option{schema.WithTools(toolDefs...)}, r.Config.RequestOpts...)
 	model := r.modelID(opts)
