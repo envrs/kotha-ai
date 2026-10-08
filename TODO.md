@@ -31,7 +31,7 @@
 - [x] Parse `.gitignore`, respect file exclusions
 - [x] Scan repo for language-specific files (detect Go, Python, JS, etc.)
 - [ ] Extract code symbols (classes, functions, imports) via LSP
-- [ ] Build context window efficiently (token budgeting)
+- [x] Build context window efficiently (token budgeting)
 
 ### LSP Integration
 - [x] `internal/lsp/` — spawn LSP servers per language
