@@ -244,7 +244,9 @@ func (q *Queries) ListLatestSessionFiles(ctx context.Context, sessionID string) 
 const listNewFiles = `-- name: ListNewFiles :many
 SELECT id, session_id, path, content, version, created_at, updated_at
 FROM files
-WHERE is_new = 1
+WHERE path NOT IN (
+  SELECT path FROM files GROUP BY path HAVING COUNT(*) > 1
+)
 ORDER BY created_at DESC
 `
 

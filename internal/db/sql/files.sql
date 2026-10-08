@@ -67,5 +67,7 @@ ORDER BY f.path;
 -- name: ListNewFiles :many
 SELECT *
 FROM files
-WHERE is_new = 1
+WHERE path NOT IN (
+  SELECT path FROM files GROUP BY path HAVING COUNT(*) > 1
+)
 ORDER BY created_at DESC;
