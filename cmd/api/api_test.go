@@ -51,6 +51,26 @@ func TestServerFlagDefault(t *testing.T) {
 	}
 }
 
+func TestClientSendsAPIKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-API-Key") != "k123" {
+			t.Errorf("api key header = %q, want k123", r.Header.Get("X-API-Key"))
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"ok": "1"})
+	}))
+	defer srv.Close()
+
+	old := apiAPIKey
+	apiAPIKey = "k123"
+	t.Cleanup(func() { apiAPIKey = old })
+
+	c := NewClient(srv.URL)
+	var out map[string]string
+	if err := c.GET(context.Background(), "/v1/sessions", &out); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func newTestCmd() *cobra.Command {
 	c := &cobra.Command{Use: "test"}
 	c.Flags().StringVar(&apiServer, "server", "", "server base URL")

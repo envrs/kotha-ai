@@ -195,6 +195,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Model"
 components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Optional server API key. The server only enforces authentication
+        when started with --api-key (or KOTHA_API_KEY); otherwise it
+        accepts unauthenticated requests. /healthz is always open.
+    bearer:
+      type: http
+      scheme: bearer
+      description: Alternative to the API key header (Authorization: Bearer <key>).
   schemas:
     SessionID:
       type: string

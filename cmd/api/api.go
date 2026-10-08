@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ var (
 	apiAutoApprove bool
 	apiTimeout     time.Duration
 	apiFormat      string
+	apiAPIKey      string
 )
 
 // Cmd is the `kotha api` subcommand that talks to a running server.
@@ -39,6 +41,7 @@ Subcommands: ask, cancel, summarize, sessions, session, messages, export, models
 
 func init() {
 	Cmd.PersistentFlags().StringVarP(&apiServer, "server", "s", "http://127.0.0.1:8080", "server base URL")
+	Cmd.PersistentFlags().StringVar(&apiAPIKey, "api-key", os.Getenv("KOTHA_API_KEY"), "API key for the server (env KOTHA_API_KEY)")
 	Cmd.AddCommand(askCmd, cancelCmd, summarizeCmd, sessionsCmd, sessionCmd, messagesCmd, exportCmd, modelsCmd, stopCmd, statusCmd)
 }
 
@@ -62,6 +65,9 @@ func (c *Client) doBytes(ctx context.Context, method, path string, body io.Reade
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if apiAPIKey != "" {
+		req.Header.Set("X-API-Key", apiAPIKey)
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err

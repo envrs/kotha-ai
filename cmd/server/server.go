@@ -20,6 +20,7 @@ type ServerConfig struct {
 	Addr    string
 	Cwd     string
 	Debug   bool
+	APIKey  string
 	Timeout time.Duration
 }
 
@@ -84,7 +85,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	mux.HandleFunc("POST /v1/stop", srv.handleStop)
 	srv.srv = &http.Server{
 		Addr:         cfg.Addr,
-		Handler:      mux,
+		Handler:      APIKeyAuth(cfg.APIKey, mux),
 		IdleTimeout:  cfg.Timeout,
 		ReadTimeout:  cfg.Timeout,
 		WriteTimeout: cfg.Timeout,

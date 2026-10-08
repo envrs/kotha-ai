@@ -17,6 +17,7 @@ var (
 	serverAddr    string
 	serverCwd     string
 	serverDebug   bool
+	serverAPIKey  string
 	serverTimeout time.Duration
 	serverDaemon  bool
 	serverPIDFile string
@@ -46,6 +47,10 @@ Use the 'kotha api' subcommand to make requests to a running server.`,
 		cfg.Cwd = serverCwd
 		cfg.Debug = serverDebug
 		cfg.Timeout = serverTimeout
+		cfg.APIKey = serverAPIKey
+		if cfg.APIKey == "" {
+			cfg.APIKey = os.Getenv("KOTHA_API_KEY")
+		}
 		if serverDaemon {
 			return runDaemon(cfg)
 		}
@@ -57,6 +62,7 @@ func init() {
 	Cmd.Flags().StringVar(&serverAddr, "addr", DefaultServerConfig().Addr, "server listen address")
 	Cmd.Flags().StringVar(&serverCwd, "cwd", "", "working directory")
 	Cmd.Flags().BoolVar(&serverDebug, "debug", false, "enable debug logging")
+	Cmd.Flags().StringVar(&serverAPIKey, "api-key", "", "require this API key on /v1 requests (env KOTHA_API_KEY)")
 	Cmd.Flags().DurationVar(&serverTimeout, "timeout", DefaultServerConfig().Timeout, "request timeout")
 	Cmd.Flags().BoolVar(&serverDaemon, "daemon", false, "run as a background daemon")
 	Cmd.Flags().StringVar(&serverPIDFile, "pidfile", "", "write daemon PID to file")
