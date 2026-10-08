@@ -81,7 +81,7 @@
 
 ### OpenAPI-Driven API
 - [ ] Routes: `/sessions`, `/ask`, `/stop`, `/history`
-- [ ] Middleware: auth (GitHub OAuth or API key), logging, rate limiting
+- [x] Middleware: auth (GitHub OAuth or API key), logging, rate limiting
 - [ ] WebSocket support for streaming responses (optional)
 
 ### Client CLI
