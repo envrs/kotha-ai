@@ -12,6 +12,8 @@ var (
 	ErrNoMessages = errors.New("sdk: no message service")
 	ErrNoAgent    = errors.New("sdk: no agent service")
 
+	ErrInvalidExportFormat = errors.New("sdk: export format must be json or text")
+
 	ErrRequestCancelled = agent.ErrRequestCancelled
 	ErrSessionBusy      = agent.ErrSessionBusy
 )

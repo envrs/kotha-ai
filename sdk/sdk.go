@@ -10,6 +10,7 @@ package sdk
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/llm/agent"
@@ -81,6 +82,34 @@ func (c *Client) ListMessages(ctx context.Context, sessionID string) ([]message.
 		return nil, ErrNoMessages
 	}
 	return c.Messages.List(ctx, sessionID)
+}
+
+// Export snapshots a session and its messages. format is "json"
+// (default) or "text"; the result is the encoded export.
+func (c *Client) Export(ctx context.Context, sessionID, format string) ([]byte, error) {
+	if c.Sessions == nil {
+		return nil, ErrNoSessions
+	}
+	if c.Messages == nil {
+		return nil, ErrNoMessages
+	}
+	sess, err := c.Sessions.Get(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	msgs, err := c.Messages.List(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	exp := session.NewExport(sess, msgs)
+	switch format {
+	case "", "json":
+		return exp.JSON()
+	case "text":
+		return []byte(exp.Text()), nil
+	default:
+		return nil, fmt.Errorf("%w: %q", ErrInvalidExportFormat, format)
+	}
 }
 
 // Model reports the coder agent's current model.

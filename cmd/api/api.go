@@ -29,7 +29,7 @@ var Cmd = &cobra.Command{
 	Short: "Make a request to a running Kotha server",
 	Long: `Make a request to a running Kotha server.
 
-Subcommands: ask, cancel, summarize, sessions, session, messages, models, stop, status.`,
+Subcommands: ask, cancel, summarize, sessions, session, messages, export, models, stop, status.`,
 	Example: `
   kotha api ask -s http://127.0.0.1:8080 -i my-session -p "summarize this repo"
   kotha api stop -s http://127.0.0.1:8080
@@ -39,7 +39,7 @@ Subcommands: ask, cancel, summarize, sessions, session, messages, models, stop, 
 
 func init() {
 	Cmd.PersistentFlags().StringVarP(&apiServer, "server", "s", "http://127.0.0.1:8080", "server base URL")
-	Cmd.AddCommand(askCmd, cancelCmd, summarizeCmd, sessionsCmd, sessionCmd, messagesCmd, modelsCmd, stopCmd, statusCmd)
+	Cmd.AddCommand(askCmd, cancelCmd, summarizeCmd, sessionsCmd, sessionCmd, messagesCmd, exportCmd, modelsCmd, stopCmd, statusCmd)
 }
 
 // Client wraps an HTTP server for the api subcommand.
@@ -56,23 +56,31 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-func (c *Client) do(ctx context.Context, method, path string, body io.Reader, out any) error {
+func (c *Client) doBytes(ctx context.Context, method, path string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("server %s: %s", resp.Status, strings.TrimSpace(string(data)))
+		return nil, fmt.Errorf("server %s: %s", resp.Status, strings.TrimSpace(string(data)))
+	}
+	return data, nil
+}
+
+func (c *Client) do(ctx context.Context, method, path string, body io.Reader, out any) error {
+	data, err := c.doBytes(ctx, method, path, body)
+	if err != nil {
+		return err
 	}
 	if out != nil && len(data) > 0 {
 		return json.Unmarshal(data, out)

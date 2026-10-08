@@ -88,6 +88,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Messages"
+  /sessions/{session_id}/export:
+    get:
+      summary: Export a session as JSON or plain text
+      operationId: exportSession
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SessionID"
+        - name: format
+          in: query
+          required: false
+          description: output format
+          schema:
+            type: string
+            enum: [json, text]
+            default: json
+      responses:
+        "200":
+          description: exported session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionExport"
+            text/plain:
+              schema:
+                type: string
+        "404":
+          description: not found
   /sessions/{session_id}/ask:
     post:
       summary: Send a prompt and stream the agent response
@@ -218,6 +248,33 @@ components:
         session_id:
           $ref: "#/components/schemas/SessionID"
       required: [id, role]
+    SessionExport:
+      type: object
+      properties:
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+        title:
+          type: string
+        exported_at:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExportedMessage"
+      required: [session_id, messages]
+    ExportedMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system, tool]
+        content:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+      required: [role, content]
     AskRequest:
       type: object
       properties:

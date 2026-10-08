@@ -11,6 +11,7 @@ import (
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/llm/agent"
 	"github.com/kothagpt/kotha/internal/llm/models"
+	"github.com/kothagpt/kotha/internal/session"
 )
 
 // askRequest mirrors the OpenAPI AskRequest schema.
@@ -127,6 +128,40 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeJSON(w, http.StatusOK, msgs)
+}
+
+// handleExportSession serves GET /v1/sessions/{session_id}/export in
+// JSON (default) or plain text via ?format=.
+func (s *Server) handleExportSession(w http.ResponseWriter, r *http.Request) {
+	id := s.sessionID(r)
+	sess, err := s.app.Sessions.Get(r.Context(), id)
+	if err != nil {
+		s.writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	msgs, err := s.app.Messages.List(r.Context(), id)
+	if err != nil {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	exp := session.NewExport(sess, msgs)
+	switch format := r.URL.Query().Get("format"); format {
+	case "", "json":
+		b, err := exp.JSON()
+		if err != nil {
+			s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(b)
+	case "text":
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, exp.Text())
+	default:
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "format must be json or text"})
+	}
 }
 
 func (s *Server) handleCurrentModel(w http.ResponseWriter, r *http.Request) {

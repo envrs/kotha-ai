@@ -60,6 +60,7 @@ var specToSDK = map[string]string{
 	"getSession":       "GetSession",
 	"deleteSession":    "DeleteSession",
 	"listMessages":     "ListMessages",
+	"exportSession":    "Export",
 	"ask":              "Ask",
 	"cancelSession":    "Cancel",
 	"summarizeSession": "Summarize",
