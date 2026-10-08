@@ -3,47 +3,47 @@
 ## Phase 1: Foundation (Weeks 1–2)
 
 ### Core App Initialization
-- [ ] Finalize `app.New()` to initialize all subsystems (DB, config, providers, LSP)
-- [ ] Implement graceful shutdown in `app.Shutdown()`
-- [ ] Error recovery for panics in agent goroutines
+- [x] Finalize `app.New()` to initialize all subsystems (DB, config, providers, LSP)
+- [x] Implement graceful shutdown in `app.Shutdown()`
+- [x] Error recovery for panics in agent goroutines
 
 ### Multi-Provider LLM Integration
-- [ ] Implement provider factory in `llm/provider/` (OpenAI, Anthropic, Gemini, GROQ, etc.)
-- [ ] Token counting & cost tracking per model in `llm/runtime/`
-- [ ] Model routing logic in `llm/route/` (fallback, cost optimization)
-- [ ] Streaming response handling for all providers
+- [x] Implement provider factory in `llm/provider/` (OpenAI, Anthropic, Gemini, GROQ, etc.)
+- [x] Token counting & cost tracking per model in `llm/runtime/`
+- [x] Model routing logic in `llm/route/` (fallback, cost optimization)
+- [x] Streaming response handling for all providers
 
 ### Configuration System
-- [ ] Config file loading (YAML/JSON) with Viper
-- [ ] JSON schema generation (`cmd/schema/`) for IDE autocompletion
-- [ ] Environment variable overrides
-- [ ] Config validation
+- [x] Config file loading (YAML/JSON) with Viper
+- [x] JSON schema generation (`cmd/schema/`) for IDE autocompletion
+- [x] Environment variable overrides
+- [x] Config validation
 
 ## Phase 2: LLM Agent & Tools (Weeks 3–4)
 
 ### Agentic Loop
-- [ ] `llm/agent/` — implement reasoning, tool calling, retry logic
-- [ ] Tool definitions in `llm/schema/` (structured tool specs)
-- [ ] Built-in tools: file read/write, code search, git commands
-- [ ] MCP tool integration: fetch and invoke external tools
+- [x] `llm/agent/` — implement reasoning, tool calling, retry logic
+- [x] Tool definitions in `llm/schema/` (structured tool specs)
+- [x] Built-in tools: file read/write, code search, git commands
+- [x] MCP tool integration: fetch and invoke external tools
 
 ### Project Context
-- [ ] Parse `.gitignore`, respect file exclusions
-- [ ] Scan repo for language-specific files (detect Go, Python, JS, etc.)
+- [x] Parse `.gitignore`, respect file exclusions
+- [x] Scan repo for language-specific files (detect Go, Python, JS, etc.)
 - [ ] Extract code symbols (classes, functions, imports) via LSP
 - [ ] Build context window efficiently (token budgeting)
 
 ### LSP Integration
-- [ ] `internal/lsp/` — spawn LSP servers per language
-- [ ] Hover info, go-to-definition, code completion
-- [ ] Diagnostics/errors extraction
+- [x] `internal/lsp/` — spawn LSP servers per language
+- [x] Hover info, go-to-definition, code completion
+- [x] Diagnostics/errors extraction
 - [ ] Symbol indexing for cross-file references
 
 ## Phase 3: Session & Persistence (Week 5)
 
 ### Database Schema
-- [ ] Sessions table: ID, name, created, updated, status
-- [ ] Messages table: session_id, role, content, timestamp
+- [x] Sessions table: ID, name, created, updated, status
+- [x] Messages table: session_id, role, content, timestamp
 - [ ] Tools/calls table: track tool invocations and results
 
 ### Session Management
