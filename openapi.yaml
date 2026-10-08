@@ -1,0 +1,259 @@
+openapi: 3.0.3
+info:
+  title: Kotha SDK
+  version: 1.0.0
+  description: |
+    Public Go API surface for embedding Kotha. The OpenAPI spec mirrors
+    `sdk/sdk.go` so the two stay in sync; the regen target validates
+    that the Go SDK implements every path declared here.
+  contact:
+    name: Kotha
+    url: https://kotha.ai
+servers:
+  - url: https://api.kotha.ai/v1
+    description: default
+paths:
+  /sessions:
+    get:
+      summary: List sessions
+      operationId: listSessions
+      responses:
+        "200":
+          description: sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sessions"
+    post:
+      summary: Create a session
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "200":
+          description: created session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+  /sessions/{session_id}:
+    get:
+      summary: Get a session
+      operationId: getSession
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SessionID"
+      responses:
+        "200":
+          description: session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: not found
+    delete:
+      summary: Delete a session
+      operationId: deleteSession
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SessionID"
+      responses:
+        "204":
+          description: deleted
+  /sessions/{session_id}/messages:
+    get:
+      summary: List messages for a session
+      operationId: listMessages
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SessionID"
+      responses:
+        "200":
+          description: messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Messages"
+  /sessions/{session_id}/ask:
+    post:
+      summary: Send a prompt and stream the agent response
+      operationId: ask
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SessionID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskRequest"
+      responses:
+        "200":
+          description: final agent event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AskResult"
+  /sessions/{session_id}/cancel:
+    post:
+      summary: Cancel in-flight work for a session
+      operationId: cancelSession
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SessionID"
+      responses:
+        "204":
+          description: cancelled
+  /sessions/{session_id}/summarize:
+    post:
+      summary: Trigger session summarization
+      operationId: summarizeSession
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SessionID"
+      responses:
+        "204":
+          description: summarization started
+  /models:
+    get:
+      summary: Current model
+      operationId: currentModel
+      responses:
+        "200":
+          description: model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Model"
+    put:
+      summary: Update the coder agent model
+      operationId: updateModel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateModelRequest"
+      responses:
+        "200":
+          description: updated model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Model"
+components:
+  schemas:
+    SessionID:
+      type: string
+      format: uuid
+      description: unique session identifier
+    Session:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/SessionID"
+        title:
+          type: string
+        message_count:
+          type: integer
+          format: int64
+        prompt_tokens:
+          type: integer
+          format: int64
+        completion_tokens:
+          type: integer
+          format: int64
+        created_at:
+          type: integer
+          format: int64
+        updated_at:
+          type: integer
+          format: int64
+      required: [id, title]
+    Sessions:
+      type: array
+      items:
+        $ref: "#/components/schemas/Session"
+    CreateSessionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+      required: [title]
+    Messages:
+      type: array
+      items:
+        $ref: "#/components/schemas/Message"
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system, tool]
+        session_id:
+          $ref: "#/components/schemas/SessionID"
+      required: [id, role]
+    AskRequest:
+      type: object
+      properties:
+        prompt:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: string
+        auto_approve:
+          type: boolean
+        timeout_ms:
+          type: integer
+      required: [prompt]
+    AskResult:
+      type: object
+      properties:
+        message:
+          $ref: "#/components/schemas/Message"
+    Model:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        context_window:
+          type: integer
+          format: int64
+        can_reason:
+          type: boolean
+    UpdateModelRequest:
+      type: object
+      properties:
+        model_id:
+          type: string
+      required: [model_id]
