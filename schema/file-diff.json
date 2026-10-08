@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FileDiff",
+  "description": "A unified diff for a single file, produced by the agent's edits and rendered before a revert or apply.",
+  "type": "object",
+  "definitions": {
+    "line": {
+      "type": "object",
+      "properties": {
+        "prefix": { "type": "string", "enum": ["+", "-", " ", "@"], "description": "Unified diff line prefix." },
+        "content": { "type": "string", "description": "Line text without the prefix." }
+      },
+      "required": ["prefix", "content"]
+    },
+    "hunk": {
+      "type": "object",
+      "properties": {
+        "header": { "type": "string", "description": "Hunk header, e.g. @@ -1,5 +1,6 @@." },
+        "lines": { "type": "array", "items": { "$ref": "#/definitions/line" } }
+      },
+      "required": ["header", "lines"]
+    }
+  },
+  "properties": {
+    "path": { "type": "string", "minLength": 1, "description": "File the diff applies to." },
+    "old_path": { "type": "string", "description": "Source path when the file was renamed." },
+    "old_content": { "type": "string", "description": "Content before the change; empty for new files." },
+    "new_content": { "type": "string", "description": "Content after the change; empty for deletions." },
+    "hunks": { "type": "array", "items": { "$ref": "#/definitions/hunk" }, "description": "Diff hunks in file order." },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "additions": { "type": "integer", "minimum": 0 },
+        "deletions": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["additions", "deletions"],
+      "description": "Line statistics."
+    },
+    "binary": { "type": "boolean", "default": false, "description": "True when the file cannot be diffed as text." },
+    "applied": { "type": "boolean", "default": false, "description": "True once the diff is written to disk." },
+    "session_id": { "$ref": "session-id.json" },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["path"]
+}

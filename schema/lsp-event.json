@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LSPEvent",
+  "description": "Events from language server processes: lifecycle, diagnostics and document synchronization.",
+  "type": "object",
+  "allOf": [{ "$ref": "event.json" }],
+  "properties": {
+    "source": { "const": "lsp" },
+    "type": { "pattern": "^lsp\\.[a-z0-9_.]+$", "description": "LSP event type, e.g. lsp.diagnostics." },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "server": { "type": "string", "description": "Language id of the server, e.g. go, python." },
+        "operation": {
+          "type": "string",
+          "enum": ["starting", "ready", "diagnostics", "document_changed", "crashed", "shutdown"],
+          "description": "Operation the server reported."
+        },
+        "uri": { "type": "string", "description": "Affected document URI." },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "severity": { "type": "string", "enum": ["error", "warning", "info", "hint"] },
+              "message": { "type": "string" },
+              "location": { "$ref": "location.json" },
+              "code": { "type": "string" }
+            },
+            "required": ["severity", "message"]
+          },
+          "description": "Diagnostics reported for the document."
+        }
+      },
+      "required": ["server", "operation"]
+    }
+  }
+}

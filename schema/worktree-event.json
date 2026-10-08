@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WorktreeEvent",
+  "description": "Events for git worktree lifecycle used when sessions run in parallel checkouts.",
+  "type": "object",
+  "allOf": [{ "$ref": "event.json" }],
+  "properties": {
+    "source": { "const": "worktree" },
+    "type": { "pattern": "^worktree\\.[a-z0-9_.]+$", "description": "Worktree event type, e.g. worktree.added." },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["added", "removed", "pruned", "locked", "unlocked"],
+          "description": "Worktree action."
+        },
+        "path": { "type": "string", "description": "Worktree path." },
+        "branch": { "type": "string", "description": "Branch checked out in the worktree." },
+        "head": { "type": "string", "pattern": "^[0-9a-f]{7,40}$", "description": "HEAD commit SHA." }
+      },
+      "required": ["action", "path"]
+    }
+  }
+}

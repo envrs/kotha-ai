@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TUIEvent",
+  "description": "Events produced by the terminal UI: view changes, key bindings and layout updates.",
+  "type": "object",
+  "allOf": [{ "$ref": "event.json" }],
+  "properties": {
+    "source": { "const": "tui" },
+    "type": { "pattern": "^tui\\.[a-z0-9_.]+$", "description": "TUI event type, e.g tui.view_changed." },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "enum": ["chat", "sessions", "settings", "help", "diff"],
+          "description": "Active view."
+        },
+        "key": { "type": "string", "description": "Key binding that triggered the event." },
+        "width": { "type": "integer", "minimum": 0, "description": "Terminal width in cells." },
+        "height": { "type": "integer", "minimum": 0, "description": "Terminal height in cells." },
+        "theme": { "type": "string", "description": "Active theme name." }
+      }
+    }
+  }
+}

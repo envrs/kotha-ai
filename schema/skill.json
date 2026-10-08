@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Skill",
+  "description": "A reusable skill: markdown instructions with frontmatter that can be loaded into context on demand.",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "Skill name, unique per source." },
+    "description": { "type": "string", "minLength": 1, "description": "When to use the skill; used for automatic selection." },
+    "argument_hint": { "type": "string", "description": "Hint shown for arguments, e.g. <path-to-file>." },
+    "path": { "type": "string", "description": "Path to the skill markdown file." },
+    "body": { "type": "string", "description": "Markdown content of the skill." },
+    "model": { "type": "string", "description": "Model override for sessions started from this skill." },
+    "allowed_tools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tools the skill may use; empty means all tools."
+    },
+    "source": { "type": "string", "enum": ["builtin", "user", "project"], "description": "Where the skill was defined." },
+    "license": { "type": "string", "description": "SPDX license id when distributed." },
+    "enabled": { "type": "boolean", "default": true }
+  },
+  "required": ["name", "description"]
+}

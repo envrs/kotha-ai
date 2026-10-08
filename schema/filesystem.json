@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Filesystem",
+  "description": "A filesystem entry as reported by file tools: metadata for a path, with content only for readable text files.",
+  "type": "object",
+  "properties": {
+    "path": { "type": "string", "minLength": 1, "description": "Absolute path, or workspace-relative when the tool was invoked with a root." },
+    "type": { "type": "string", "enum": ["file", "directory", "symlink"], "description": "Entry type." },
+    "size": { "type": "integer", "minimum": 0, "description": "Size in bytes." },
+    "mode": { "type": "string", "description": "POSIX permission bits as an octal string, e.g. 0644." },
+    "executable": { "type": "boolean", "default": false, "description": "True when the file has the executable bit." },
+    "modified_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "hash": { "type": "string", "description": "SHA-256 of the file contents, used for change detection." },
+    "encoding": { "type": "string", "enum": ["utf8", "binary"], "default": "utf8", "description": "Content encoding." },
+    "content": { "type": "string", "description": "File contents; omitted for directories and binary files." },
+    "ignored": { "type": "boolean", "default": false, "description": "True when matched by gitignore rules." }
+  },
+  "required": ["path", "type"]
+}

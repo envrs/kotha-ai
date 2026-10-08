@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectCopy",
+  "description": "An isolated copy of a project created for a parallel session, so concurrent agents never touch the same working tree.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid", "description": "Copy id." },
+    "source_project_id": { "$ref": "project-id.json" },
+    "destination": { "type": "string", "minLength": 1, "description": "Absolute path the project was copied to." },
+    "mode": {
+      "type": "string",
+      "enum": ["copy", "hardlink", "symlink"],
+      "default": "copy",
+      "description": "How files are duplicated."
+    },
+    "include_ignored": { "type": "boolean", "default": false, "description": "Also copy files matched by ignore rules." },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "copying", "completed", "failed"],
+      "default": "pending",
+      "description": "Copy state."
+    },
+    "files": { "type": "integer", "minimum": 0, "description": "Number of files copied." },
+    "bytes": { "type": "integer", "minimum": 0, "description": "Bytes copied." },
+    "error": { "type": "string", "description": "Failure reason when status is failed." },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "completed_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["id", "source_project_id", "destination", "status"]
+}

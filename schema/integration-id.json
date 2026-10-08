@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IntegrationID",
+  "description": "Unique integration identifier. Refines identifier.json with the uuid format.",
+  "type": "string",
+  "format": "uuid",
+  "minLength": 1,
+  "examples": ["b6e1c7d2-90a4-4c58-8f31-2d6a0e9b7c44"]
+}

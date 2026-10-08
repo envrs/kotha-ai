@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Workspace",
+  "description": "A working area inside a project: the directory sessions run in, plus the settings scoped to it.",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "workspace-id.json" },
+    "project_id": { "$ref": "project-id.json" },
+    "name": { "type": "string", "description": "Display name." },
+    "root": { "type": "string", "minLength": 1, "description": "Absolute path of the workspace root." },
+    "kind": {
+      "type": "string",
+      "enum": ["main", "worktree", "copy", "remote"],
+      "default": "main",
+      "description": "How the workspace relates to the project."
+    },
+    "settings": { "type": "object", "description": "Workspace scoped overrides (agents, model, permissions)." },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "updated_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["id", "project_id", "root"]
+}

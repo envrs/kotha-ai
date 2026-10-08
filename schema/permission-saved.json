@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PermissionSaved",
+  "description": "A permission rule persisted after the user chose an answer for an ask-mode prompt. Extends the base rule with identity and provenance.",
+  "type": "object",
+  "allOf": [{ "$ref": "permission.json" }],
+  "properties": {
+    "id": { "type": "string", "format": "uuid", "description": "Saved rule id." },
+    "session_id": { "$ref": "session-id.json" },
+    "project_id": { "$ref": "project-id.json" },
+    "origin": { "type": "string", "description": "Config file path the rule was written to." },
+    "remember": {
+      "type": "string",
+      "enum": ["once", "session", "always"],
+      "default": "session",
+      "description": "How long the saved answer applies."
+    },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "expires_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds after which the rule is dropped." }
+  },
+  "required": ["id", "source", "created_at"]
+}

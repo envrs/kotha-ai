@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InstallationEvent",
+  "description": "Events about the Kotha installation itself: installs, upgrades, migrations and rollback.",
+  "type": "object",
+  "allOf": [{ "$ref": "event.json" }],
+  "properties": {
+    "source": { "const": "installation" },
+    "type": { "pattern": "^installation\\.[a-z0-9_.]+$", "description": "Installation event type, e.g. installation.upgraded." },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["installed", "upgraded", "uninstalled", "migrated", "rolled_back"],
+          "description": "Installation action."
+        },
+        "version": { "type": "string", "description": "Version after the action." },
+        "previous_version": { "type": "string", "description": "Version before the action." },
+        "platform": { "type": "string", "description": "Target platform, e.g. linux/amd64." },
+        "error": { "type": "string", "description": "Failure reason." }
+      },
+      "required": ["action"]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Reference",
+  "description": "A resolved reference to code, documentation or history: what an agent or client navigates to.",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": ["file", "symbol", "url", "commit", "doc", "tool"],
+      "description": "What the reference points at."
+    },
+    "label": { "type": "string", "description": "Human readable label shown in citations." },
+    "path": { "type": "string", "description": "File path for file and symbol references." },
+    "location": { "$ref": "location.json", "description": "Span inside the file." },
+    "url": { "type": "string", "format": "uri", "description": "URL for url and doc references." },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$", "description": "Commit SHA for commit references." },
+    "score": { "type": "number", "minimum": 0, "maximum": 1, "description": "Retrieval confidence." },
+    "session_id": { "$ref": "session-id.json" },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["kind"]
+}

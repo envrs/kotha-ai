@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EventManifest",
+  "description": "Registry of every event type Kotha may emit, mapping each one to the schema file that validates it.",
+  "type": "object",
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "description": "Event type or prefix.* wildcard." },
+        "schema": { "type": "string", "description": "Schema file that validates this event, e.g. server-event.json." },
+        "schema_version": { "type": "integer", "minimum": 1, "description": "Version of the entry schema." },
+        "source": {
+          "type": "string",
+          "enum": ["server", "tui", "ide", "lsp", "mcp", "vcs", "workspace", "installation", "session", "worktree", "legacy"],
+          "description": "Subsystem that emits the event."
+        },
+        "durable": { "type": "boolean", "description": "True when the event is persisted and replayable." },
+        "description": { "type": "string" }
+      },
+      "required": ["type", "schema", "source", "durable"]
+    }
+  },
+  "properties": {
+    "version": { "type": "integer", "minimum": 1, "description": "Manifest version." },
+    "generated_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/entry" },
+      "description": "One entry per event type or wildcard."
+    }
+  },
+  "required": ["version", "events"]
+}

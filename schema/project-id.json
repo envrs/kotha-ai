@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectID",
+  "description": "Unique project identifier. Refines identifier.json with the uuid format.",
+  "type": "string",
+  "format": "uuid",
+  "minLength": 1,
+  "examples": ["0d1b8a44-3f6e-4a1c-9b7d-2e5c8f0a1b33"]
+}

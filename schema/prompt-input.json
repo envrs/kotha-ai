@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PromptInput",
+  "description": "A prompt invocation: the selected template plus resolved arguments and execution options.",
+  "type": "object",
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Prompt id or inline template text (see prompt.json)."
+    },
+    "arguments": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Values substituted into the template."
+    },
+    "session_id": { "$ref": "session-id.json" },
+    "model": { "type": "string", "description": "Model override for this invocation." },
+    "agent": { "type": "string", "description": "Agent override for this invocation." },
+    "system": { "type": "string", "description": "Extra system instructions prepended to the rendered prompt." },
+    "attachments": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "File paths attached to the invocation."
+    },
+    "auto_approve": { "type": "boolean", "default": false, "description": "Skip permission prompts for this invocation." }
+  },
+  "required": ["prompt"]
+}

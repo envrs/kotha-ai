@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ServerEvent",
+  "description": "Events emitted by the Kotha HTTP server: startup, readiness, health and job progress.",
+  "type": "object",
+  "allOf": [{ "$ref": "event.json" }],
+  "properties": {
+    "source": { "const": "server" },
+    "type": { "pattern": "^server\\.[a-z0-9_.]+$", "description": "Server event type, e.g. server.ready." },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": ["starting", "ready", "degraded", "stopping", "stopped"],
+          "description": "Server lifecycle state."
+        },
+        "address": { "type": "string", "description": "Bound listen address." },
+        "version": { "type": "string", "description": "Server version string." },
+        "job": { "type": "string", "description": "Job identifier for progress events." }
+      }
+    }
+  }
+}

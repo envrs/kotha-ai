@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ModelsDev",
+  "description": "Cached snapshot of the models.dev catalog: provider and model metadata fetched over HTTP and refreshed by etag.",
+  "type": "object",
+  "definitions": {
+    "provider_entry": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Provider id." },
+        "name": { "type": "string" },
+        "api": { "type": "string", "description": "Wire protocol dialect." },
+        "env": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Environment variables holding credentials."
+        },
+        "models": {
+          "type": "array",
+          "items": { "$ref": "model.json" },
+          "description": "Models catalogued for this provider."
+        }
+      },
+      "required": ["id", "name", "api", "models"]
+    }
+  },
+  "properties": {
+    "url": { "type": "string", "format": "uri", "default": "https://models.dev/api.json", "description": "Catalog endpoint." },
+    "etag": { "type": "string", "description": "ETag from the last fetch, used for conditional requests." },
+    "fetched_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds of the last successful fetch." },
+    "providers": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/provider_entry" },
+      "description": "Catalog entries keyed by provider id."
+    }
+  },
+  "required": ["url", "providers"]
+}

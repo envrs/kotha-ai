@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Integration",
+  "description": "A configured third-party integration, wiring an external service to a connection and a credential.",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "integration-id.json" },
+    "kind": { "type": "string", "minLength": 1, "description": "Integration type, e.g. github, gitlab, slack." },
+    "name": { "type": "string", "description": "Display name." },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "connected", "disconnected", "error"],
+      "default": "pending",
+      "description": "Integration state."
+    },
+    "connection": { "$ref": "connection.json" },
+    "credential_id": { "type": "string", "format": "uuid", "description": "Credential backing the integration (see credential.json)." },
+    "scopes": { "type": "array", "items": { "type": "string" }, "description": "Scopes granted by the remote service." },
+    "settings": { "type": "object", "description": "Integration specific configuration." },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "updated_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["id", "kind", "name", "status"]
+}

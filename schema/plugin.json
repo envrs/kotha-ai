@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plugin",
+  "description": "An installed plugin: external package contributing commands, skills, agents, hooks and permissions.",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string", "pattern": "^@?[a-z0-9][a-z0-9@/._-]*$", "description": "Plugin name, e.g. @acme/kotha-plugin." },
+    "version": { "type": "string", "description": "Installed semantic version." },
+    "description": { "type": "string" },
+    "source": { "type": "string", "minLength": 1, "description": "npm package, git URL or local path the plugin came from." },
+    "enabled": { "type": "boolean", "default": true },
+    "commands": { "type": "array", "items": { "type": "string" }, "description": "Command names contributed by the plugin." },
+    "skills": { "type": "array", "items": { "type": "string" }, "description": "Skill names contributed by the plugin." },
+    "agents": { "type": "array", "items": { "type": "string" }, "description": "Agent names contributed by the plugin." },
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "event": { "type": "string", "description": "Event type or wildcard the hook listens for (see event-manifest.json)." },
+          "command": { "type": "string", "description": "Executable invoked for the hook." },
+          "timeout_ms": { "type": "integer", "minimum": 1, "default": 30000 }
+        },
+        "required": ["event", "command"]
+      },
+      "description": "Event hooks run by the plugin."
+    },
+    "permissions": {
+      "type": "array",
+      "items": { "$ref": "permission.json" },
+      "description": "Permissions requested by the plugin at install time."
+    },
+    "settings": { "type": "object", "description": "Plugin specific configuration." }
+  },
+  "required": ["name", "version", "source"]
+}

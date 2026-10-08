@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SessionTodo",
+  "description": "A checklist item tracked for a session, used by the todo tool and rendered by clients.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "description": "Todo id (see identifier.json)." },
+    "session_id": { "$ref": "session-id.json" },
+    "content": { "type": "string", "minLength": 1, "description": "Todo text." },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "in_progress", "done", "cancelled"],
+      "default": "pending",
+      "description": "Todo state."
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "default": "medium",
+      "description": "Display priority."
+    },
+    "order": { "type": "integer", "minimum": 0, "description": "Stable display order." },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "updated_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["id", "session_id", "content", "status"]
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Session",
+  "description": "A conversation session bound to a project and workspace. Persisted in the sessions table; timestamps are unix milliseconds.",
+  "type": "object",
+  "properties": {
+    "id": { "$ref": "session-id.json" },
+    "parent_session_id": { "$ref": "session-id.json" },
+    "project_id": { "$ref": "project-id.json" },
+    "workspace_id": { "$ref": "workspace-id.json" },
+    "title": { "type": "string", "description": "Human readable session title." },
+    "status": {
+      "type": "string",
+      "enum": ["idle", "running", "waiting_input", "compacting", "error"],
+      "default": "idle",
+      "description": "Current lifecycle state of the session."
+    },
+    "agent": { "type": "string", "description": "Agent driving the session (see agent.json)." },
+    "model": { "type": "string", "description": "Active model id in provider.model form (see model.json)." },
+    "summary_message_id": {
+      "type": "string",
+      "description": "Message id of the compaction summary, when the session has been compacted."
+    },
+    "message_count": { "type": "integer", "minimum": 0, "description": "Number of persisted messages." },
+    "prompt_tokens": { "type": "integer", "minimum": 0, "description": "Accumulated input tokens." },
+    "completion_tokens": { "type": "integer", "minimum": 0, "description": "Accumulated output tokens." },
+    "cost": { "type": "number", "minimum": 0, "description": "Accumulated cost in USD." },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "updated_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["id", "title", "created_at", "updated_at"]
+}

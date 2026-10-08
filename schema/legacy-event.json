@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LegacyEvent",
+  "description": "Pre-manifest event shape kept for clients built before event-manifest.json existed. Emits the base envelope with an untyped payload and a legacy_ prefixed type.",
+  "type": "object",
+  "allOf": [{ "$ref": "event.json" }],
+  "properties": {
+    "source": { "const": "legacy" },
+    "type": { "pattern": "^legacy\\.[a-z0-9_.]+$", "description": "Legacy event type, e.g. legacy.session_updated." },
+    "payload": { "type": "object", "description": "Untyped payload carried by the legacy producer." }
+  },
+  "deprecated": true
+}

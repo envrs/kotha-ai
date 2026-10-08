@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SessionInput",
+  "description": "A single user turn submitted to a session, before it is persisted as a message.",
+  "type": "object",
+  "properties": {
+    "session_id": { "$ref": "session-id.json" },
+    "text": { "type": "string", "description": "Raw prompt text." },
+    "attachments": {
+      "type": "array",
+      "items": { "type": "string", "description": "Filesystem path or data URL." },
+      "description": "Files attached to the turn."
+    },
+    "command": { "type": "string", "description": "Slash command invoked by the input (see command.json)." },
+    "prompt": { "$ref": "prompt-input.json" },
+    "model": { "type": "string", "description": "Model override for this turn only." },
+    "agent": { "type": "string", "description": "Agent override for this turn only." },
+    "auto_approve": { "type": "boolean", "default": false, "description": "Skip permission prompts for this turn." },
+    "created_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["text"]
+}

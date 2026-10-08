@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VCSEvent",
+  "description": "Events from the version control system: commits, checkouts, merges and working tree changes.",
+  "type": "object",
+  "allOf": [{ "$ref": "event.json" }],
+  "properties": {
+    "source": { "const": "vcs" },
+    "type": { "pattern": "^vcs\\.[a-z0-9_.]+$", "description": "VCS event type, e.g. vcs.committed." },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string", "description": "Repository root path." },
+        "action": {
+          "type": "string",
+          "enum": ["status", "staged", "commit", "checkout", "merge", "rebase", "stash", "conflict"],
+          "description": "Repository action."
+        },
+        "branch": { "type": "string", "description": "Branch name." },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$", "description": "Commit SHA." },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths affected by the action."
+        }
+      },
+      "required": ["repository", "action"]
+    }
+  }
+}

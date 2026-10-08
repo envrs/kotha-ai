@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DurableEventManifest",
+  "description": "Manifest of events that survive restarts. Adds replay, ordering and retention guarantees on top of the in-memory event manifest.",
+  "type": "object",
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "description": "Event type or prefix.* wildcard." },
+        "schema": { "type": "string", "description": "Schema file that validates this event, e.g. session-event.json." },
+        "schema_version": { "type": "integer", "minimum": 1, "description": "Version of the entry schema." },
+        "replay": { "type": "boolean", "description": "True when consumers receive the event after reconnecting." },
+        "ordering": {
+          "type": "string",
+          "enum": ["total", "per_session", "per_source"],
+          "default": "per_source",
+          "description": "Scope in which seq must be strictly increasing."
+        },
+        "retention_days": { "type": "integer", "minimum": 0, "description": "Days the event is kept before compaction. 0 keeps it until compaction." },
+        "requires_checkpoint": { "type": "boolean", "default": false, "description": "True when replay needs a consumer checkpoint." },
+        "description": { "type": "string" }
+      },
+      "required": ["type", "schema", "replay", "ordering", "retention_days"]
+    }
+  },
+  "properties": {
+    "version": { "type": "integer", "minimum": 1, "description": "Manifest version." },
+    "generated_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/entry" },
+      "description": "One entry per durable event type."
+    }
+  },
+  "required": ["version", "events"]
+}

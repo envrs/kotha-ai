@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Event",
+  "description": "Base envelope for every event published by Kotha. Source families extend it with allOf and register their types in event-manifest.json.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "format": "uuid", "description": "Event id." },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$",
+      "description": "Namespaced event type, e.g. session.updated."
+    },
+    "seq": { "type": "integer", "minimum": 0, "description": "Monotonic sequence number per source." },
+    "ts": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." },
+    "source": {
+      "type": "string",
+      "enum": ["server", "tui", "ide", "lsp", "mcp", "vcs", "workspace", "installation", "session", "worktree", "legacy"],
+      "description": "Subsystem that produced the event."
+    },
+    "session_id": { "$ref": "session-id.json" },
+    "project_id": { "$ref": "project-id.json" },
+    "workspace_id": { "$ref": "workspace-id.json" },
+    "payload": { "type": "object", "description": "Event specific body defined by the source schema." }
+  },
+  "required": ["id", "type", "ts", "source"]
+}

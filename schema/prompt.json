@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Prompt",
+  "description": "A reusable prompt template with named arguments, usable by commands, skills and agents.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "description": "Prompt id (see identifier.json)." },
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$", "description": "Prompt name." },
+    "description": { "type": "string", "description": "What the prompt does." },
+    "template": { "type": "string", "minLength": 1, "description": "Template body with {{argument}} placeholders." },
+    "arguments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "required": { "type": "boolean", "default": false },
+          "default": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "description": "Arguments substituted into the template."
+    },
+    "model": { "type": "string", "description": "Preferred model id." },
+    "agent": { "type": "string", "description": "Preferred agent name." },
+    "source": { "type": "string", "enum": ["builtin", "user", "project", "plugin"], "description": "Where the prompt was defined." },
+    "version": { "type": "integer", "minimum": 1, "default": 1, "description": "Template version." },
+    "updated_at": { "type": "integer", "format": "int64", "description": "Unix timestamp in milliseconds." }
+  },
+  "required": ["name", "description", "template"]
+}
