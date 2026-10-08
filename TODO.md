@@ -49,7 +49,7 @@
 ### Session Management
 - [ ] Create new session, resume session, list sessions
 - [ ] Save conversation history to SQLite
-- [ ] Export session as JSON/text
+- [x] Export session as JSON/text
 - [ ] Share links (local URL or cloud integration)
 
 ### History & Recall
