@@ -15,6 +15,7 @@ type Chatter interface {
 // LoopConfig bounds the native agentic loop.
 type LoopConfig struct {
 	MaxTurns    int
+	Model       string
 	RequestOpts []schema.Option
 }
 
@@ -31,6 +32,8 @@ type TurnResult struct {
 	Completion schema.Completion
 	Turns      int
 	ToolCalls  int
+	Usage      schema.TokenUsage
+	Cost       float64
 }
 
 // Runtime is the native LLM core: model turns interleaved with validated,
@@ -58,6 +61,12 @@ func WithMaxTurns(n int) func(*Runtime) {
 	return func(r *Runtime) { r.Config.MaxTurns = n }
 }
 
+// WithModel sets the model ID used for cost accounting (and as the
+// default request model when request options do not specify one).
+func WithModel(id string) func(*Runtime) {
+	return func(r *Runtime) { r.Config.Model = id }
+}
+
 func WithRequestOpts(opts ...schema.Option) func(*Runtime) {
 	return func(r *Runtime) { r.Config.RequestOpts = append(r.Config.RequestOpts, opts...) }
 }
@@ -73,8 +82,10 @@ func (r *Runtime) Run(ctx context.Context, messages []schema.Message) (TurnResul
 	transcript := append([]schema.Message(nil), messages...)
 	toolDefs := r.Registry.Definitions()
 	opts := append([]schema.Option{schema.WithTools(toolDefs...)}, r.Config.RequestOpts...)
+	model := r.modelID(opts)
 
 	var last schema.Completion
+	var usage schema.TokenUsage
 	totalTools := 0
 	turns := 0
 	for ; turns < r.Config.maxTurns(); turns++ {
@@ -86,6 +97,7 @@ func (r *Runtime) Run(ctx context.Context, messages []schema.Message) (TurnResul
 			return TurnResult{}, err
 		}
 		last = comp
+		usage = addUsage(usage, comp.Usage)
 		if len(comp.ToolCalls) == 0 {
 			transcript = append(transcript, completionMessage(comp))
 			turns++
@@ -103,7 +115,26 @@ func (r *Runtime) Run(ctx context.Context, messages []schema.Message) (TurnResul
 		Completion: last,
 		Turns:      turns,
 		ToolCalls:  totalTools,
+		Usage:      usage,
+		Cost:       CostFor(model, usage),
 	}, nil
+}
+
+// modelID resolves the model for cost accounting: explicit loop config
+// wins, then request options, then empty (unknown → zero cost).
+func (r *Runtime) modelID(opts []schema.Option) string {
+	if r.Config.Model != "" {
+		return r.Config.Model
+	}
+	return schema.NewRequestOptions(opts...).Model
+}
+
+func addUsage(a, b schema.TokenUsage) schema.TokenUsage {
+	a.Input += b.Input
+	a.Output += b.Output
+	a.CacheCreated += b.CacheCreated
+	a.CacheRead += b.CacheRead
+	return a
 }
 
 func completionMessage(comp schema.Completion) schema.Message {
