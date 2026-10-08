@@ -1,14 +1,11 @@
-name: "Validations"
+name: Validations
 
 on:
-  workflow_dispatch:
-  pull_request:
   push:
-    branches:
-      - master
+    branches: [main]
+  pull_request:
 
 jobs:
-
   Static-Analysis:
     name: "Static analysis"
     runs-on: ubuntu-latest
@@ -17,10 +14,20 @@ jobs:
 
       - name: Bootstrap environment
         uses: ./.github/actions/bootstrap
+        with:
+          go-version: "1.24.x"
 
-      - name: Run static analysis
-        run: make static-analysis
+      - name: Vet
+        run: make vet
 
+      - name: Format check
+        run: make fmt-check
+
+      - name: Go mod tidy check
+        run: make check-go-mod-tidy
+
+      - name: License check
+        run: make check-licenses
 
   Unit-Test:
     name: "Unit tests"
@@ -30,6 +37,8 @@ jobs:
 
       - name: Bootstrap environment
         uses: ./.github/actions/bootstrap
+        with:
+          go-version: "1.24.x"
 
-      - name: Run unit tests
+      - name: Unit tests
         run: make unit
