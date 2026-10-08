@@ -10,9 +10,9 @@ import (
 )
 
 type askRequest struct {
-	Prompt        string   `json:"prompt"`
-	Attachments   []string `json:"attachments,omitempty"`
-	AutoApprove   bool     `json:"auto_approve,omitempty"`
+	Prompt      string   `json:"prompt"`
+	Attachments []string `json:"attachments,omitempty"`
+	AutoApprove bool     `json:"auto_approve,omitempty"`
 }
 
 type askResult struct {

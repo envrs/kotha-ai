@@ -8,7 +8,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	zone "github.com/lrstanley/bubblezone"
+	"github.com/kothagpt/kotha/cmd/api"
+	"github.com/kothagpt/kotha/cmd/server"
 	"github.com/kothagpt/kotha/internal/app"
 	"github.com/kothagpt/kotha/internal/concurrency"
 	"github.com/kothagpt/kotha/internal/config"
@@ -19,8 +20,7 @@ import (
 	"github.com/kothagpt/kotha/internal/pubsub"
 	"github.com/kothagpt/kotha/internal/tui"
 	"github.com/kothagpt/kotha/internal/version"
-	"github.com/kothagpt/kotha/cmd/api"
-	"github.com/kothagpt/kotha/cmd/server"
+	zone "github.com/lrstanley/bubblezone"
 	"github.com/spf13/cobra"
 )
 

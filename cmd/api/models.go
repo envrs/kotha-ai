@@ -9,11 +9,11 @@ import (
 )
 
 type model struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Provider     string `json:"provider"`
-	ContextWindow int64 `json:"context_window"`
-	CanReason    bool   `json:"can_reason"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Provider      string `json:"provider"`
+	ContextWindow int64  `json:"context_window"`
+	CanReason     bool   `json:"can_reason"`
 }
 
 var modelsCmd = &cobra.Command{

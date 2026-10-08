@@ -9,7 +9,7 @@ import (
 )
 
 type message struct {
-	ID  string `json:"id"`
+	ID   string `json:"id"`
 	Role string `json:"role"`
 }
 

@@ -16,9 +16,9 @@ import (
 
 // askRequest mirrors the OpenAPI AskRequest schema.
 type askRequest struct {
-	Prompt        string   `json:"prompt"`
-	Attachments   []string `json:"attachments,omitempty"`
-	AutoApprove   bool     `json:"auto_approve,omitempty"`
+	Prompt      string   `json:"prompt"`
+	Attachments []string `json:"attachments,omitempty"`
+	AutoApprove bool     `json:"auto_approve,omitempty"`
 }
 
 // askResult mirrors the OpenAPI AskResult schema.
@@ -64,9 +64,9 @@ func (s *Server) sessionID(r *http.Request) string {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"uptime":   s.Uptime().String(),
-		"addr":     s.Addr(),
+		"status": "ok",
+		"uptime": s.Uptime().String(),
+		"addr":   s.Addr(),
 	})
 }
 

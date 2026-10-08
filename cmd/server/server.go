@@ -17,10 +17,10 @@ import (
 
 // ServerConfig holds runtime configuration for the background server.
 type ServerConfig struct {
-	Addr     string
-	Cwd      string
-	Debug    bool
-	Timeout  time.Duration
+	Addr    string
+	Cwd     string
+	Debug   bool
+	Timeout time.Duration
 }
 
 // DefaultServerConfig returns a sensible default configuration.

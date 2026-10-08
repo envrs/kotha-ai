@@ -14,13 +14,13 @@ import (
 )
 
 var (
-	apiServer string
-	apiSession string
-	apiPrompt string
+	apiServer      string
+	apiSession     string
+	apiPrompt      string
 	apiAttachments []string
 	apiAutoApprove bool
-	apiTimeout time.Duration
-	apiFormat string
+	apiTimeout     time.Duration
+	apiFormat      string
 )
 
 // Cmd is the `kotha api` subcommand that talks to a running server.
