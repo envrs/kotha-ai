@@ -280,16 +280,29 @@ func searchFilesWithRegex(pattern, rootPath, include string) ([]grepMatch, error
 		}
 	}
 
+	gi := fileutil.NewGitIgnore(rootPath)
+
 	err = filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}
 
 		if info.IsDir() {
+			// Pick up nested .gitignore files, then prune ignored dirs.
+			_ = gi.LoadDir(path)
+			if rel, rerr := filepath.Rel(rootPath, path); rerr == nil &&
+				gi.Match(filepath.ToSlash(rel), true) {
+				return filepath.SkipDir
+			}
 			return nil // Skip directories
 		}
 
 		if fileutil.SkipHidden(path) {
+			return nil
+		}
+
+		if rel, rerr := filepath.Rel(rootPath, path); rerr == nil &&
+			gi.Match(filepath.ToSlash(rel), false) {
 			return nil
 		}
 

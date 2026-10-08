@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kothagpt/kotha/internal/config"
+	"github.com/kothagpt/kotha/internal/fileutil"
 )
 
 type LSParams struct {
@@ -132,9 +133,23 @@ func listDirectory(initialPath string, ignorePatterns []string, limit int) ([]st
 	var results []string
 	truncated := false
 
+	gi := fileutil.NewGitIgnore(initialPath)
+
 	err := filepath.Walk(initialPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip files we don't have permission to access
+		}
+
+		if info.IsDir() {
+			// Pick up nested .gitignore files as the walk descends.
+			_ = gi.LoadDir(path)
+		}
+		if rel, rerr := filepath.Rel(initialPath, path); rerr == nil &&
+			gi.Match(filepath.ToSlash(rel), info.IsDir()) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
 		if shouldSkip(path, ignorePatterns) {
