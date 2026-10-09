@@ -5,12 +5,12 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	chAnsi "github.com/charmbracelet/x/ansi"
-	"github.com/muesli/ansi"
-	"github.com/muesli/reflow/truncate"
-	"github.com/muesli/termenv"
 	"github.com/kothagpt/kotha/internal/tui/styles"
 	"github.com/kothagpt/kotha/internal/tui/theme"
 	"github.com/kothagpt/kotha/internal/tui/util"
+	"github.com/muesli/ansi"
+	"github.com/muesli/reflow/truncate"
+	"github.com/muesli/termenv"
 )
 
 // Most of this code is borrowed from
@@ -47,7 +47,7 @@ func PlaceOverlay(
 		t := theme.CurrentTheme()
 		baseStyle := styles.BaseStyle()
 
-		var shadowbg string = ""
+		var shadowbg string
 		shadowchar := lipgloss.NewStyle().
 			Background(t.BackgroundDarker()).
 			Foreground(t.Background()).

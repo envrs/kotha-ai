@@ -163,10 +163,10 @@ func (s *PersistentShell) execCommand(command string, timeout time.Duration, ctx
 	cwdFile := filepath.Join(tempDir, fmt.Sprintf("kotha-cwd-%d", time.Now().UnixNano()))
 
 	defer func() {
-		os.Remove(stdoutFile)
-		os.Remove(stderrFile)
-		os.Remove(statusFile)
-		os.Remove(cwdFile)
+		_ = os.Remove(stdoutFile)
+		_ = os.Remove(stderrFile)
+		_ = os.Remove(statusFile)
+		_ = os.Remove(cwdFile)
 	}()
 
 	fullCommand := fmt.Sprintf(`
@@ -233,7 +233,7 @@ echo $EXEC_EXIT_CODE > %s
 
 	exitCode := 0
 	if exitCodeStr != "" {
-		fmt.Sscanf(exitCodeStr, "%d", &exitCode)
+		_, _ = fmt.Sscanf(exitCodeStr, "%d", &exitCode)
 	} else if interrupted {
 		exitCode = 143
 		stderr += "\nCommand execution timed out or was interrupted"
@@ -265,11 +265,11 @@ func (s *PersistentShell) killChildren() {
 	for pidStr := range strings.SplitSeq(string(output), "\n") {
 		if pidStr = strings.TrimSpace(pidStr); pidStr != "" {
 			var pid int
-			fmt.Sscanf(pidStr, "%d", &pid)
+			_, _ = fmt.Sscanf(pidStr, "%d", &pid)
 			if pid > 0 {
 				proc, err := os.FindProcess(pid)
 				if err == nil {
-					proc.Signal(syscall.SIGTERM)
+					_ = proc.Signal(syscall.SIGTERM)
 				}
 			}
 		}
@@ -303,9 +303,9 @@ func (s *PersistentShell) Close() {
 		return
 	}
 
-	s.stdin.Write([]byte("exit\n"))
+	_, _ = s.stdin.Write([]byte("exit\n"))
 
-	s.cmd.Process.Kill()
+	_ = s.cmd.Process.Kill()
 	s.isAlive = false
 }
 

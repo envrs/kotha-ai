@@ -563,18 +563,6 @@ func createStyles(t theme.Theme) (removedLineStyle, addedLineStyle, contextLineS
 // Rendering Functions
 // -------------------------------------------------------------------------
 
-func lipglossToHex(color lipgloss.Color) string {
-	r, g, b, a := color.RGBA()
-
-	// Scale uint32 values (0-65535) to uint8 (0-255).
-	r8 := uint8(r >> 8)
-	g8 := uint8(g >> 8)
-	b8 := uint8(b >> 8)
-	a8 := uint8(a >> 8)
-
-	return fmt.Sprintf("#%02x%02x%02x%02x", r8, g8, b8, a8)
-}
-
 // applyHighlighting applies intra-line highlighting to a piece of text
 func applyHighlighting(content string, segments []Segment, segmentType LineType, highlightBg lipgloss.AdaptiveColor) string {
 	// Find all ANSI sequences in the content
@@ -655,10 +643,10 @@ func applyHighlighting(content string, segments []Segment, segmentType LineType,
 			// Apply foreground and background highlight
 			sb.WriteString("\x1b[38;2;")
 			r, g, b, _ := fgColor.RGBA()
-			sb.WriteString(fmt.Sprintf("%d;%d;%dm", r>>8, g>>8, b>>8))
+			fmt.Fprintf(&sb, "%d;%d;%dm", r>>8, g>>8, b>>8)
 			sb.WriteString("\x1b[48;2;")
 			r, g, b, _ = bgColor.RGBA()
-			sb.WriteString(fmt.Sprintf("%d;%d;%dm", r>>8, g>>8, b>>8))
+			fmt.Fprintf(&sb, "%d;%d;%dm", r>>8, g>>8, b>>8)
 			sb.WriteString(char)
 			// Reset foreground and background
 			sb.WriteString("\x1b[39m")

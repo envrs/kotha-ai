@@ -23,7 +23,7 @@ func setupService(t *testing.T) (Service, context.Context) {
 
 	sqlDB, err := db.Connect()
 	require.NoError(t, err)
-	t.Cleanup(func() { sqlDB.Close() })
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	ctx := context.Background()
 	q := db.New(sqlDB)
 	_, err = q.CreateSession(ctx, db.CreateSessionParams{ID: "s1", Title: "t"})

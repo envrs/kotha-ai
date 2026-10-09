@@ -1,12 +1,9 @@
 package server
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"syscall"
 	"time"
 
@@ -155,16 +152,3 @@ func ServerStatusFor(pidfile string) ServerStatus {
 	}
 	return ServerStatus{Running: pidAlive(pid), PID: pid}
 }
-
-// signalNotify starts a signal handler that calls onSignal.
-func signalNotify(onSignal func()) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-c
-		onSignal()
-	}()
-}
-
-var _ = errors.New
-var _ = context.Background

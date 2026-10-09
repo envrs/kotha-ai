@@ -28,7 +28,7 @@ func TestLsTool_Run(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "ls_tool_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Set up a default config provider for tests
 	cfg := &config.Config{
@@ -194,7 +194,7 @@ func TestLsTool_Run(t *testing.T) {
 		origWd, err := os.Getwd()
 		require.NoError(t, err)
 		defer func() {
-			os.Chdir(origWd)
+			_ = os.Chdir(origWd)
 		}()
 
 		// Change to a directory above the temp directory
@@ -381,7 +381,7 @@ func TestListDirectory(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "list_directory_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create a test directory structure
 	testDirs := []string{

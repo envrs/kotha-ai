@@ -38,11 +38,6 @@ type EditorKeyMaps struct {
 	OpenEditor key.Binding
 }
 
-type bluredEditorKeyMaps struct {
-	Send       key.Binding
-	Focus      key.Binding
-	OpenEditor key.Binding
-}
 type DeleteAttachmentKeyMaps struct {
 	AttachmentDeleteMode key.Binding
 	Escape               key.Binding
@@ -89,7 +84,7 @@ func (m *editorCmp) openEditor() tea.Cmd {
 	if err != nil {
 		return util.ReportError(err)
 	}
-	tmpfile.Close()
+	_ = tmpfile.Close()
 	c := exec.Command(editor, tmpfile.Name()) //nolint:gosec
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
@@ -105,7 +100,7 @@ func (m *editorCmp) openEditor() tea.Cmd {
 		if len(content) == 0 {
 			return util.ReportWarn("Message is empty")
 		}
-		os.Remove(tmpfile.Name())
+		_ = os.Remove(tmpfile.Name())
 		attachments := m.attachments
 		m.attachments = nil
 		return SendMsg{

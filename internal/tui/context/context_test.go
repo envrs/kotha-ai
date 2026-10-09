@@ -94,7 +94,7 @@ func TestHelpers(t *testing.T) {
 	if !ev.Expired(time.Now().Add(time.Second)) {
 		t.Fatal("expected expired")
 	}
-	var d Data = NewData()
+	d := NewData()
 	d.Set("k", "v")
 	if v, ok := d.Get("k"); !ok || v != "v" {
 		t.Fatal("data broken")

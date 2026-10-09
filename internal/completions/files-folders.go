@@ -6,10 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/kothagpt/kotha/internal/fileutil"
 	"github.com/kothagpt/kotha/internal/logging"
 	"github.com/kothagpt/kotha/internal/tui/components/dialog"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
 type filesAndFoldersContextGroup struct {
@@ -66,7 +66,7 @@ func (cg *filesAndFoldersContextGroup) getFiles(query string) ([]string, error) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to get rg stdout pipe: %w", err)
 		}
-		defer rgPipe.Close()
+		defer func() { _ = rgPipe.Close() }()
 
 		cmdFzf.Stdin = rgPipe
 		var fzfOut bytes.Buffer

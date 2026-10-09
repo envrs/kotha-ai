@@ -59,7 +59,7 @@ func ImagePreview(width int, filename string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer imageContent.Close()
+	defer func() { _ = imageContent.Close() }()
 
 	img, _, err := image.Decode(imageContent)
 	if err != nil {

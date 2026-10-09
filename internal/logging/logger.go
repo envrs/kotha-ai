@@ -150,7 +150,7 @@ func AppendToSessionLogFile(sessionId string, filename string, content string) s
 		Error("Failed to open session log file", "filepath", filePath, "error", err)
 		return ""
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Append chunk to file
 	_, err = f.WriteString(content)

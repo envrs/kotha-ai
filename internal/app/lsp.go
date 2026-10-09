@@ -42,7 +42,7 @@ func (app *App) createAndStartLSPClient(ctx context.Context, provider config.Con
 	if err != nil {
 		logging.Error("Initialize failed", "name", name, "error", err)
 		// Clean up the client to prevent resource leaks
-		lspClient.Close()
+		_ = lspClient.Close()
 		return
 	}
 

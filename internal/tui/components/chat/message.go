@@ -392,22 +392,22 @@ func renderToolParams(paramWidth int, toolCall message.ToolCall) string {
 	switch toolCall.Name {
 	case agent.AgentToolName:
 		var params agent.AgentParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		prompt := strings.ReplaceAll(params.Prompt, "\n", " ")
 		return renderParams(paramWidth, prompt)
 	case tools.BashToolName:
 		var params tools.BashParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		command := strings.ReplaceAll(params.Command, "\n", " ")
 		return renderParams(paramWidth, command)
 	case tools.EditToolName:
 		var params tools.EditParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		filePath := removeWorkingDirPrefix(params.FilePath)
 		return renderParams(paramWidth, filePath)
 	case tools.FetchToolName:
 		var params tools.FetchParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		url := params.URL
 		toolParams := []string{
 			url,
@@ -421,7 +421,7 @@ func renderToolParams(paramWidth int, toolCall message.ToolCall) string {
 		return renderParams(paramWidth, toolParams...)
 	case tools.GlobToolName:
 		var params tools.GlobParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		pattern := params.Pattern
 		toolParams := []string{
 			pattern,
@@ -432,7 +432,7 @@ func renderToolParams(paramWidth int, toolCall message.ToolCall) string {
 		return renderParams(paramWidth, toolParams...)
 	case tools.GrepToolName:
 		var params tools.GrepParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		pattern := params.Pattern
 		toolParams := []string{
 			pattern,
@@ -449,7 +449,7 @@ func renderToolParams(paramWidth int, toolCall message.ToolCall) string {
 		return renderParams(paramWidth, toolParams...)
 	case tools.LSToolName:
 		var params tools.LSParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		path := params.Path
 		if path == "" {
 			path = "."
@@ -457,11 +457,11 @@ func renderToolParams(paramWidth int, toolCall message.ToolCall) string {
 		return renderParams(paramWidth, path)
 	case tools.SourcegraphToolName:
 		var params tools.SourcegraphParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		return renderParams(paramWidth, params.Query)
 	case tools.ViewToolName:
 		var params tools.ViewParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		filePath := removeWorkingDirPrefix(params.FilePath)
 		toolParams := []string{
 			filePath,
@@ -475,7 +475,7 @@ func renderToolParams(paramWidth int, toolCall message.ToolCall) string {
 		return renderParams(paramWidth, toolParams...)
 	case tools.WriteToolName:
 		var params tools.WriteParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		filePath := removeWorkingDirPrefix(params.FilePath)
 		return renderParams(paramWidth, filePath)
 	default:
@@ -521,13 +521,13 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 		)
 	case tools.EditToolName:
 		metadata := tools.EditResponseMetadata{}
-		json.Unmarshal([]byte(response.Metadata), &metadata)
+		_ = json.Unmarshal([]byte(response.Metadata), &metadata)
 		truncDiff := truncateHeight(metadata.Diff, maxResultHeight)
 		formattedDiff, _ := diff.FormatDiff(truncDiff, diff.WithTotalWidth(width))
 		return formattedDiff
 	case tools.FetchToolName:
 		var params tools.FetchParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		mdFormat := "markdown"
 		switch params.Format {
 		case "text":
@@ -550,7 +550,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 		return baseStyle.Width(width).Foreground(t.TextMuted()).Render(resultContent)
 	case tools.ViewToolName:
 		metadata := tools.ViewResponseMetadata{}
-		json.Unmarshal([]byte(response.Metadata), &metadata)
+		_ = json.Unmarshal([]byte(response.Metadata), &metadata)
 		ext := filepath.Ext(metadata.FilePath)
 		if ext == "" {
 			ext = ""
@@ -564,9 +564,9 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 		)
 	case tools.WriteToolName:
 		params := tools.WriteParams{}
-		json.Unmarshal([]byte(toolCall.Input), &params)
+		_ = json.Unmarshal([]byte(toolCall.Input), &params)
 		metadata := tools.WriteResponseMetadata{}
-		json.Unmarshal([]byte(response.Metadata), &metadata)
+		_ = json.Unmarshal([]byte(response.Metadata), &metadata)
 		ext := filepath.Ext(params.FilePath)
 		if ext == "" {
 			ext = ""

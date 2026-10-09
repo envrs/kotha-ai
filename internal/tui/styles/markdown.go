@@ -20,12 +20,10 @@ type rendererKey struct {
 }
 
 var (
-	mdMu       sync.RWMutex
+	mdMu        sync.RWMutex
 	mdRenderers = map[rendererKey]*glamour.TermRenderer{}
 	mdStyleCfg  *ansi.StyleConfig
 	mdStyleKey  rendererKey // theme part of key only; width-independent
-	mdSpace     string
-	mdSpaceOnce bool
 )
 
 // Helper functions for style pointers

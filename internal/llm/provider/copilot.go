@@ -10,14 +10,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
-	"github.com/openai/openai-go/shared"
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/llm/models"
 	toolsPkg "github.com/kothagpt/kotha/internal/llm/tools"
 	"github.com/kothagpt/kotha/internal/logging"
 	"github.com/kothagpt/kotha/internal/message"
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/shared"
 )
 
 type copilotOptions struct {
@@ -68,7 +68,7 @@ func (c *copilotClient) exchangeGitHubToken(githubToken string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("failed to exchange GitHub token: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -287,7 +287,7 @@ func (c *copilotClient) preparedParams(messages []openai.ChatCompletionMessagePa
 		Tools:    tools,
 	}
 
-	if c.providerOptions.model.CanReason == true {
+	if c.providerOptions.model.CanReason {
 		params.MaxCompletionTokens = openai.Int(c.providerOptions.maxTokens)
 		switch c.options.reasoningEffort {
 		case "low":
@@ -435,7 +435,7 @@ func (c *copilotClient) stream(ctx context.Context, messages []message.Message, 
 				if c.isAnthropicModel() {
 					// Monkeypatch adapter for Sonnet-4 multi-tool use
 					for _, choice := range chunk.Choices {
-						if choice.Delta.ToolCalls != nil && len(choice.Delta.ToolCalls) > 0 {
+						if len(choice.Delta.ToolCalls) > 0 {
 							toolCall := choice.Delta.ToolCalls[0]
 							// Detect tool use start
 							if currentToolCallId == "" {
@@ -473,7 +473,7 @@ func (c *copilotClient) stream(ctx context.Context, messages []message.Message, 
 						}
 						if choice.FinishReason == "tool_calls" {
 							msgToolCalls = append(msgToolCalls, currentToolCall)
-							acc.ChatCompletion.Choices[0].Message.ToolCalls = msgToolCalls
+							acc.Choices[0].Message.ToolCalls = msgToolCalls
 						}
 					}
 				}
@@ -487,7 +487,7 @@ func (c *copilotClient) stream(ctx context.Context, messages []message.Message, 
 				}
 				// Stream completed successfully
 				finishReason := c.finishReason(string(acc.ChatCompletion.Choices[0].FinishReason))
-				if len(acc.ChatCompletion.Choices[0].Message.ToolCalls) > 0 {
+				if len(acc.Choices[0].Message.ToolCalls) > 0 {
 					toolCalls = append(toolCalls, c.toolCalls(acc.ChatCompletion)...)
 				}
 				if len(toolCalls) > 0 {
@@ -668,4 +668,3 @@ func WithCopilotBearerToken(bearerToken string) CopilotOption {
 		options.bearerToken = bearerToken
 	}
 }
-

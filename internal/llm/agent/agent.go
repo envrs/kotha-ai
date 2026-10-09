@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/concurrency"
+	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/llm/models"
 	"github.com/kothagpt/kotha/internal/llm/prompt"
 	"github.com/kothagpt/kotha/internal/llm/provider"
@@ -306,7 +306,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				agentMessage.AddFinish(message.FinishReasonCanceled)
-				a.messages.Update(context.Background(), agentMessage)
+				_ = a.messages.Update(context.Background(), agentMessage)
 				return a.err(ErrRequestCancelled)
 			}
 			return a.err(fmt.Errorf("failed to process events: %w", err))

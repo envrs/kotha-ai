@@ -461,7 +461,7 @@ func mergeLocalConfig(workingDir string) {
 
 	// Merge local config if it exists
 	if err := local.ReadInConfig(); err == nil {
-		viper.MergeConfigMap(local.AllSettings())
+		_ = viper.MergeConfigMap(local.AllSettings())
 	}
 }
 

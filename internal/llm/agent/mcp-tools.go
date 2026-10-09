@@ -16,10 +16,10 @@ import (
 )
 
 type mcpTool struct {
-	mcpName     string
-	tool        mcp.Tool
-	mcpConfig   config.MCPServer
-	permissions permission.Service
+	mcpName        string
+	tool           mcp.Tool
+	mcpConfig      config.MCPServer
+	permissions    permission.Service
 	configProvider config.ConfigProvider
 	logger         logging.Logger
 }
@@ -48,7 +48,7 @@ func (b *mcpTool) Info() tools.ToolInfo {
 }
 
 func runTool(ctx context.Context, c MCPClient, toolName string, input string) (tools.ToolResponse, error) {
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
@@ -166,7 +166,7 @@ func getTools(ctx context.Context, name string, m config.MCPServer, permissions 
 	for _, t := range tools.Tools {
 		stdioTools = append(stdioTools, NewMcpTool(name, t, permissions, m, configProvider, logger))
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	return stdioTools
 }
 

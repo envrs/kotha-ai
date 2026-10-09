@@ -316,7 +316,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Start the summarization process
 		return a, func() tea.Msg {
 			ctx := context.Background()
-			a.app.CoderAgent.Summarize(ctx, a.selectedSession.ID)
+			_ = a.app.CoderAgent.Summarize(ctx, a.selectedSession.ID)
 			return nil
 		}
 

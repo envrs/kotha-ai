@@ -18,7 +18,7 @@ var statusCmd = &cobra.Command{
 			fmt.Println("server not running")
 			return nil
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		var out map[string]any
 		_ = json.NewDecoder(resp.Body).Decode(&out)
 		fmt.Println("server running:", resp.Status)

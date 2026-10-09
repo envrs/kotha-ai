@@ -23,7 +23,7 @@ func setupService(t *testing.T) (Service, context.Context) {
 
 	sqlDB, err := db.Connect()
 	require.NoError(t, err)
-	t.Cleanup(func() { sqlDB.Close() })
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	return NewService(db.New(sqlDB)), context.Background()
 }
 
