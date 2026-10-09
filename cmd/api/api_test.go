@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -78,3 +79,39 @@ func newTestCmd() *cobra.Command {
 }
 
 var _ = fmt.Sprint
+
+func TestAskStream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/sessions/s1/ask/stream" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"type":"response","done":true}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	var buf strings.Builder
+	req := askRequest{Prompt: "hi"}
+	if err := c.AskStream(context.Background(), "s1", req, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `"done":true`) {
+		t.Fatalf("expected done event, got %q", buf.String())
+	}
+}
+
+func TestAskStreamErrorStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"boom"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL)
+	var buf strings.Builder
+	if err := c.AskStream(context.Background(), "s1", askRequest{Prompt: "hi"}, &buf); err == nil {
+		t.Fatal("expected error")
+	}
+}

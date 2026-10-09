@@ -100,3 +100,20 @@ func (c *Client) Stream(ctx context.Context, sessionID, prompt string, attachmen
 	}
 	return c.Agent.Run(ctx, sessionID, prompt, attachments...)
 }
+
+// AskStream sends a prompt and returns the raw agent event channel,
+// mirroring the HTTP POST /v1/sessions/{session_id}/ask/stream endpoint.
+// The caller owns draining the channel.
+func (c *Client) AskStream(ctx context.Context, sessionID, prompt string, opts ...AskOption) (<-chan agent.AgentEvent, error) {
+	if c.Agent == nil {
+		return nil, ErrNoAgent
+	}
+	var o AskOptions
+	for _, fn := range opts {
+		fn(&o)
+	}
+	if o.AutoApprove {
+		c.AutoApproveSession(sessionID)
+	}
+	return c.Agent.Run(ctx, sessionID, prompt, o.Attachments...)
+}

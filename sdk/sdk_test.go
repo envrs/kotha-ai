@@ -129,6 +129,33 @@ func TestAskErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestAskStream(t *testing.T) {
+	evs := make(chan agent.AgentEvent, 2)
+	evs <- agent.AgentEvent{Type: agent.AgentEventTypeResponse, Progress: "thinking"}
+	evs <- agent.AgentEvent{Type: agent.AgentEventTypeResponse, Done: true}
+	close(evs)
+	a := &fakeAgent{events: evs}
+	c := NewClient(&fakeSession{}, nil, a, &fakePermission{})
+	stream, err := c.AskStream(context.Background(), "s1", "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	for range stream {
+		count++
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 events, got %d", count)
+	}
+}
+
+func TestAskStreamNilAgent(t *testing.T) {
+	c := NewClient(&fakeSession{}, nil, nil, &fakePermission{})
+	if _, err := c.AskStream(context.Background(), "s1", "hi"); !errors.Is(err, ErrNoAgent) {
+		t.Fatalf("want ErrNoAgent, got %v", err)
+	}
+}
+
 func TestDrain(t *testing.T) {
 	evs := make(chan agent.AgentEvent, 2)
 	evs <- agent.AgentEvent{Type: agent.AgentEventTypeResponse, Progress: "p1"}

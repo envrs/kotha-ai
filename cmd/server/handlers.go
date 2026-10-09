@@ -195,6 +195,67 @@ func (s *Server) handleSummarize(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleAskStream streams agent events as Server-Sent Events (SSE),
+// mirroring the interactive TUI experience for clients that prefer
+// streaming over the single-shot response of handleAsk.
+func (s *Server) handleAskStream(w http.ResponseWriter, r *http.Request) {
+	var body askRequest
+	if err := s.readJSON(w, r, &body); err != nil {
+		return
+	}
+	if strings.TrimSpace(body.Prompt) == "" {
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "prompt is required"})
+		return
+	}
+	sid := s.sessionID(r)
+	if body.AutoApprove {
+		s.app.Permissions.AutoApproveSession(sid)
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
+	events, err := s.app.CoderAgent.Run(ctx, sid, body.Prompt)
+	if err != nil {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "streaming not supported"})
+		return
+	}
+
+	enc := json.NewEncoder(w)
+	for ev := range events {
+		payload := map[string]any{
+			"type":    string(ev.Type),
+			"message": ev.Message,
+			"done":    ev.Done,
+		}
+		if ev.SessionID != "" {
+			payload["session_id"] = ev.SessionID
+		}
+		if ev.Progress != "" {
+			payload["progress"] = ev.Progress
+		}
+		if ev.Error != nil {
+			payload["error"] = ev.Error.Error()
+		}
+		_ = enc.Encode(payload)
+		flusher.Flush()
+		if ev.Done {
+			break
+		}
+	}
+	_ = enc.Encode(map[string]string{"type": "done"})
+	flusher.Flush()
+}
+
 func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	var body askRequest
 	if err := s.readJSON(w, r, &body); err != nil {

@@ -76,6 +76,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/sessions/{session_id}/ask", srv.handleAsk)
+	mux.HandleFunc("POST /v1/sessions/{session_id}/ask/stream", srv.handleAskStream)
 	mux.HandleFunc("POST /v1/sessions/{session_id}/cancel", srv.handleCancel)
 	mux.HandleFunc("POST /v1/sessions/{session_id}/summarize", srv.handleSummarize)
 	mux.HandleFunc("GET /v1/sessions", srv.handleListSessions)

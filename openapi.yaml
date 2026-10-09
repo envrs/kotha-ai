@@ -141,6 +141,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AskResult"
+  /sessions/{session_id}/ask/stream:
+    post:
+      summary: Send a prompt and stream agent events as Server-Sent Events
+      operationId: askStream
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/SessionID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskRequest"
+      responses:
+        "200":
+          description: continuous stream of agent events terminated by a done event
+          content:
+            text/event-stream:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                  message:
+                    $ref: "#/components/schemas/Message"
+                  progress:
+                    type: string
+                  done:
+                    type: boolean
+                  error:
+                    type: string
   /sessions/{session_id}/cancel:
     post:
       summary: Cancel in-flight work for a session

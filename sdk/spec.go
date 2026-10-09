@@ -62,6 +62,7 @@ var specToSDK = map[string]string{
 	"listMessages":     "ListMessages",
 	"exportSession":    "Export",
 	"ask":              "Ask",
+	"askStream":        "AskStream",
 	"cancelSession":    "Cancel",
 	"summarizeSession": "Summarize",
 	"currentModel":     "Model",
