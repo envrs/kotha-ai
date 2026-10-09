@@ -1,8 +1,0 @@
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "PTYTicket",
-  "description": "Short-lived, prefixed ticket used to attach to a running PTY without exposing the underlying process id. Refines identifier.json with a mandatory pty_ prefix.",
-  "type": "string",
-  "pattern": "^pty_[A-Za-z0-9_-]{8,}$",
-  "examples": ["pty_01HZX8QK4M2V9T6P"]
-}

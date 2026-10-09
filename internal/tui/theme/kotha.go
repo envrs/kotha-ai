@@ -274,4 +274,3 @@ func init() {
 	// Register the Kotha theme with the theme manager
 	RegisterTheme("kotha", NewKothaTheme())
 }
-

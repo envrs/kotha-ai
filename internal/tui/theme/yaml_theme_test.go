@@ -54,7 +54,7 @@ func TestNewYamlThemeFromDef(t *testing.T) {
 	def := &YamlThemeDef{
 		Accent:     "#7cafc2",
 		Background: "#181818",
-		Details:   "darker",
+		Details:    "darker",
 		Foreground: "#d8d8d8",
 		TerminalColors: ColorPalette{
 			Normal: TerminalColors{

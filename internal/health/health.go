@@ -26,11 +26,11 @@ type CheckFunc func(ctx context.Context) error
 
 // Result is the outcome of one named check.
 type Result struct {
-	Name     string
-	Status   Status
-	Latency  time.Duration
-	Error    error
-	Checked  time.Time
+	Name    string
+	Status  Status
+	Latency time.Duration
+	Error   error
+	Checked time.Time
 }
 
 // Checker holds the registered checks.
