@@ -7,3 +7,5 @@ permit:
 ignore-packages:
   # crypto/internal/boring is released under the openSSL license as a part of the Golang Standard Libary
   - crypto/internal/boring
+  # Dual-licensed MIT/BSD (both permitted); ships LICENSE-MIT/LICENSE-BSD rather than LICENSE
+  - github.com/aymanbagabas/go-udiff
