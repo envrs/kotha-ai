@@ -12,7 +12,7 @@ inputs:
   cache-key-prefix:
     description: "Prefix all cache keys with this value"
     required: true
-    default: "831180ac25"
+    default: "dc99592922"
 
 runs:
   using: "composite"
