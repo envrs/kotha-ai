@@ -11,6 +11,7 @@ import (
 	"github.com/kothagpt/kotha/internal/app"
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/llm/agent"
+	"github.com/kothagpt/kotha/internal/llm/models"
 	"github.com/kothagpt/kotha/internal/logging"
 	"github.com/kothagpt/kotha/internal/permission"
 	"github.com/kothagpt/kotha/internal/pubsub"
@@ -25,14 +26,15 @@ import (
 )
 
 type keyMap struct {
-	Logs          key.Binding
-	Quit          key.Binding
-	Help          key.Binding
-	SwitchSession key.Binding
-	Commands      key.Binding
-	Filepicker    key.Binding
-	Models        key.Binding
-	SwitchTheme   key.Binding
+	Logs            key.Binding
+	Quit            key.Binding
+	Help            key.Binding
+	SwitchSession   key.Binding
+	Commands        key.Binding
+	Filepicker      key.Binding
+	Models          key.Binding
+	SwitchTheme     key.Binding
+	ConnectProvider key.Binding
 }
 
 type startCompactSessionMsg struct{}
@@ -77,6 +79,11 @@ var keys = keyMap{
 	SwitchTheme: key.NewBinding(
 		key.WithKeys("ctrl+t"),
 		key.WithHelp("ctrl+t", "switch theme"),
+	),
+
+	ConnectProvider: key.NewBinding(
+		key.WithKeys("ctrl+p"),
+		key.WithHelp("ctrl+p", "connect provider"),
 	),
 }
 
@@ -133,6 +140,9 @@ type appModel struct {
 	showThemeDialog bool
 	themeDialog     dialog.ThemeDialog
 
+	showProviderConnectDialog bool
+	providerConnectDialog     dialog.ProviderConnectDialog
+
 	showMultiArgumentsDialog bool
 	multiArgumentsDialog     dialog.MultiArgumentsDialogCmp
 
@@ -162,6 +172,8 @@ func (a appModel) Init() tea.Cmd {
 	cmd = a.filepicker.Init()
 	cmds = append(cmds, cmd)
 	cmd = a.themeDialog.Init()
+	cmds = append(cmds, cmd)
+	cmd = a.providerConnectDialog.Init()
 	cmds = append(cmds, cmd)
 
 	// Check if we should show the init dialog
@@ -352,6 +364,38 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.showThemeDialog = false
 		return a, tea.Batch(cmd, util.ReportInfo("Theme changed to: "+msg.ThemeName))
 
+	case dialog.ShowProviderConnectDialogMsg:
+		a.showProviderConnectDialog = true
+		a.providerConnectDialog.SetProviders(dialog.BuildProviderEntries())
+		return a, nil
+
+	case dialog.CloseProviderConnectDialogMsg:
+		a.showProviderConnectDialog = false
+		return a, nil
+
+	case dialog.ProviderConnectSelectedMsg:
+		// Persist the provider change and refresh the dialog entries.
+		err := a.app.ConfigProvider().SetProvider(msg.Provider, msg.Enabled, msg.APIKey)
+		if err != nil {
+			return a, util.ReportError(err)
+		}
+
+		// If the currently selected model's provider was disabled, re-select
+		// a default model so the agent keeps working.
+		cfg := config.Get()
+		currentModel := cfg.Agents[config.AgentCoder].Model
+		if currentModelInfo, ok := models.SupportedModels[currentModel]; ok &&
+			!msg.Enabled && currentModelInfo.Provider == msg.Provider {
+			if _, err := a.app.CoderAgent.Update(config.AgentCoder, defaultModelForAgent(config.AgentCoder)); err != nil {
+				return a, util.ReportError(err)
+			}
+		}
+
+		// Refresh the dialog entries and re-show it.
+		a.providerConnectDialog.SetProviders(dialog.BuildProviderEntries())
+		a.showProviderConnectDialog = true
+		return a, util.ReportInfo(providerConnectStatus(msg.Provider, msg.Enabled))
+
 	case dialog.CloseModelDialogMsg:
 		a.showModelDialog = false
 		return a, nil
@@ -511,11 +555,21 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, nil
 		case key.Matches(msg, keys.SwitchTheme):
-			if !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog {
+			if !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog && !a.showProviderConnectDialog {
 				// Show theme switcher dialog
 				a.showThemeDialog = true
 				// Theme list is dynamically loaded by the dialog component
 				return a, a.themeDialog.Init()
+			}
+			return a, nil
+		case key.Matches(msg, keys.ConnectProvider):
+			if a.showProviderConnectDialog {
+				a.showProviderConnectDialog = false
+				return a, nil
+			}
+			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog && !a.showThemeDialog && !a.showFilepicker && !a.showModelDialog {
+				// Show provider connect dialog
+				return a, util.CmdHandler(dialog.ShowProviderConnectDialogMsg{})
 			}
 			return a, nil
 		case key.Matches(msg, returnKey) || key.Matches(msg):
@@ -656,6 +710,16 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if a.showProviderConnectDialog {
+		d, providerCmd := a.providerConnectDialog.Update(msg)
+		a.providerConnectDialog = d.(dialog.ProviderConnectDialog)
+		cmds = append(cmds, providerCmd)
+		// Only block key messages send all other messages down
+		if _, ok := msg.(tea.KeyMsg); ok {
+			return a, tea.Batch(cmds...)
+		}
+	}
+
 	s, _ := a.status.Update(msg)
 	a.status = s.(core.StatusCmp)
 	a.pages[a.currentPage], cmd = a.pages[a.currentPage].Update(msg)
@@ -666,6 +730,24 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // RegisterCommand adds a command to the command dialog
 func (a *appModel) RegisterCommand(cmd dialog.Command) {
 	a.commands = append(a.commands, cmd)
+}
+
+// defaultModelForAgent returns the model ID that would be selected as the
+// default for the given agent based on the current provider configuration and
+// environment credentials.
+func defaultModelForAgent(agent config.AgentName) models.ModelID {
+	return config.DefaultModelForAgent(agent)
+}
+
+func providerConnectStatus(provider models.ModelProvider, enabled bool) string {
+	name := string(provider)
+	if n, ok := models.ProviderDisplayName[provider]; ok {
+		name = n
+	}
+	if enabled {
+		return fmt.Sprintf("Provider %s enabled", name)
+	}
+	return fmt.Sprintf("Provider %s disabled", name)
 }
 
 func (a *appModel) moveToPage(pageID page.PageID) tea.Cmd {
@@ -874,25 +956,41 @@ func (a appModel) View() string {
 		)
 	}
 
+	if a.showProviderConnectDialog {
+		overlay := a.providerConnectDialog.View()
+		row := lipgloss.Height(appView) / 2
+		row -= lipgloss.Height(overlay) / 2
+		col := lipgloss.Width(appView) / 2
+		col -= lipgloss.Width(overlay) / 2
+		appView = layout.PlaceOverlay(
+			col,
+			row,
+			overlay,
+			appView,
+			true,
+		)
+	}
+
 	return appView
 }
 
 func New(app *app.App) tea.Model {
 	startPage := page.ChatPage
 	model := &appModel{
-		currentPage:   startPage,
-		loadedPages:   make(map[page.PageID]bool),
-		status:        core.NewStatusCmp(app.LSPClients),
-		help:          dialog.NewHelpCmp(),
-		quit:          dialog.NewQuitCmp(),
-		sessionDialog: dialog.NewSessionDialogCmp(),
-		commandDialog: dialog.NewCommandDialogCmp(),
-		modelDialog:   dialog.NewModelDialogCmp(),
-		permissions:   dialog.NewPermissionDialogCmp(),
-		initDialog:    dialog.NewInitDialogCmp(),
-		themeDialog:   dialog.NewThemeDialogCmp(),
-		app:           app,
-		commands:      []dialog.Command{},
+		currentPage:           startPage,
+		loadedPages:           make(map[page.PageID]bool),
+		status:                core.NewStatusCmp(app.LSPClients),
+		help:                  dialog.NewHelpCmp(),
+		quit:                  dialog.NewQuitCmp(),
+		sessionDialog:         dialog.NewSessionDialogCmp(),
+		commandDialog:         dialog.NewCommandDialogCmp(),
+		modelDialog:           dialog.NewModelDialogCmp(),
+		permissions:           dialog.NewPermissionDialogCmp(),
+		initDialog:            dialog.NewInitDialogCmp(),
+		themeDialog:           dialog.NewThemeDialogCmp(),
+		providerConnectDialog: dialog.NewProviderConnectCmp(),
+		app:                   app,
+		commands:              []dialog.Command{},
 		pages: map[page.PageID]tea.Model{
 			page.ChatPage: page.NewChatPage(app),
 			page.LogsPage: page.NewLogsPage(),

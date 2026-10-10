@@ -289,6 +289,23 @@ func setProviderDefaults() {
 		}
 	}
 
+	// When credentials are available in the environment, re-enable any
+	// provider that was explicitly disabled in the config file. This makes
+	// env credentials take precedence over a persisted "disabled": true so
+	// that users who later install credentials (e.g. set GITHUB_TOKEN) are
+	// not stuck with a disabled provider.
+	enableProviderFromEnv(models.ProviderCopilot, "GITHUB_TOKEN")
+	enableProviderFromEnv(models.ProviderAnthropic, "ANTHROPIC_API_KEY")
+	enableProviderFromEnv(models.ProviderOpenAI, "OPENAI_API_KEY")
+	enableProviderFromEnv(models.ProviderGemini, "GEMINI_API_KEY")
+	enableProviderFromEnv(models.ProviderGROQ, "GROQ_API_KEY")
+	enableProviderFromEnv(models.ProviderOpenRouter, "OPENROUTER_API_KEY")
+	enableProviderFromEnv(models.ProviderXAI, "XAI_API_KEY")
+	enableProviderFromEnv(models.ProviderAzure, "AZURE_OPENAI_ENDPOINT")
+	enableProviderFromEnv(models.ProviderBedrock, "AWS_ACCESS_KEY_ID")
+	enableProviderFromEnv(models.ProviderVertexAI, "VERTEXAI_PROJECT")
+	enableProviderFromEnv(models.ProviderLocal, "LOCAL_ENDPOINT")
+
 	// Use this order to set the default models
 	// 1. Copilot
 	// 2. Anthropic
@@ -388,6 +405,41 @@ func setProviderDefaults() {
 		viper.SetDefault("agents.task.model", models.VertexAIGemini25Flash)
 		viper.SetDefault("agents.title.model", models.VertexAIGemini25Flash)
 		return
+	}
+}
+
+// enableProviderFromEnv clears the persisted "disabled" flag for a provider
+// when usable credentials are available in the environment, so env
+// credentials take precedence over a previously persisted disabled state.
+func enableProviderFromEnv(provider models.ModelProvider, envVar string) {
+	if !providerEnvHasCredentials(provider, envVar) {
+		return
+	}
+	// viper.Set overwrites any persisted value (including "disabled": true)
+	// with the env-derived value, so the provider becomes enabled.
+	viper.Set(fmt.Sprintf("providers.%s.disabled", provider), false)
+}
+
+// providerEnvHasCredentials reports whether the provider has usable
+// credentials available in the environment right now. It mirrors the
+// credential checks used elsewhere in this package so that a provider that
+// was disabled in the config file is re-enabled when the user later
+// installs credentials.
+func providerEnvHasCredentials(provider models.ModelProvider, envVar string) bool {
+	switch provider {
+	case models.ProviderCopilot:
+		tok, err := LoadGitHubToken()
+		return err == nil && tok != ""
+	case models.ProviderBedrock:
+		return hasAWSCredentials()
+	case models.ProviderVertexAI:
+		return hasVertexAICredentials()
+	case models.ProviderAzure:
+		return os.Getenv("AZURE_OPENAI_ENDPOINT") != ""
+	case models.ProviderLocal:
+		return os.Getenv("LOCAL_ENDPOINT") != ""
+	default:
+		return envVar != "" && os.Getenv(envVar) != ""
 	}
 }
 
@@ -672,6 +724,185 @@ func getProviderAPIKey(provider models.ModelProvider) string {
 	return ""
 }
 
+// reselectDefaultModel re-evaluates the default model for an agent based on
+// the currently persisted provider configuration and environment credentials.
+// It is called after a provider is enabled/disabled via the connect dialog so
+// the active model switches away from a disabled provider.
+func reselectDefaultModel(agent AgentName) bool {
+	if providerEnabled(models.ProviderCopilot) {
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     models.CopilotGPT4o,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	if providerEnabled(models.ProviderAnthropic) {
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     models.Claude37Sonnet,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	if providerEnabled(models.ProviderOpenAI) {
+		var model models.ModelID
+		maxTokens := int64(5000)
+		reasoningEffort := ""
+		switch agent {
+		case AgentTitle:
+			model = models.GPT41Mini
+			maxTokens = 80
+		case AgentTask:
+			model = models.GPT41Mini
+		default:
+			model = models.GPT41
+		}
+		if modelInfo, ok := models.SupportedModels[model]; ok && modelInfo.CanReason {
+			reasoningEffort = "medium"
+		}
+		cfg.Agents[agent] = Agent{
+			Model:           model,
+			MaxTokens:       maxTokens,
+			ReasoningEffort: reasoningEffort,
+		}
+		return true
+	}
+	if providerEnabled(models.ProviderOpenRouter) {
+		var model models.ModelID
+		maxTokens := int64(5000)
+		reasoningEffort := ""
+		switch agent {
+		case AgentTitle:
+			model = models.OpenRouterClaude35Haiku
+			maxTokens = 80
+		case AgentTask:
+			model = models.OpenRouterClaude37Sonnet
+		default:
+			model = models.OpenRouterClaude37Sonnet
+		}
+		if modelInfo, ok := models.SupportedModels[model]; ok && modelInfo.CanReason {
+			reasoningEffort = "medium"
+		}
+		cfg.Agents[agent] = Agent{
+			Model:           model,
+			MaxTokens:       maxTokens,
+			ReasoningEffort: reasoningEffort,
+		}
+		return true
+	}
+	if providerEnabled(models.ProviderGemini) {
+		var model models.ModelID
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			model = models.Gemini25Flash
+			maxTokens = 80
+		} else {
+			model = models.Gemini25
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     model,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	if providerEnabled(models.ProviderGROQ) {
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     models.QWENQwq,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	if providerEnabled(models.ProviderBedrock) {
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:           models.BedrockClaude37Sonnet,
+			MaxTokens:       maxTokens,
+			ReasoningEffort: "medium",
+		}
+		return true
+	}
+	if providerEnabled(models.ProviderVertexAI) {
+		var model models.ModelID
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			model = models.VertexAIGemini25Flash
+			maxTokens = 80
+		} else {
+			model = models.VertexAIGemini25
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     model,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	return false
+}
+
+// providerEnabled reports whether a provider is usable, considering both the
+// persisted config and environment credentials.
+func providerEnabled(provider models.ModelProvider) bool {
+	p, exists := cfg.Providers[provider]
+	if !exists {
+		return providerHasCredentialsEnv(provider)
+	}
+	if p.Disabled {
+		return false
+	}
+	return p.APIKey != "" || providerHasCredentialsEnv(provider)
+}
+
+// providerHasCredentialsEnv reports whether the provider has usable
+// credentials available in the environment right now.
+func providerHasCredentialsEnv(provider models.ModelProvider) bool {
+	switch provider {
+	case models.ProviderCopilot:
+		return os.Getenv("GITHUB_TOKEN") != ""
+	case models.ProviderBedrock:
+		return hasAWSCredentials()
+	case models.ProviderVertexAI:
+		return hasVertexAICredentials()
+	case models.ProviderLocal:
+		return os.Getenv("LOCAL_ENDPOINT") != ""
+	default:
+		return os.Getenv(envVarForProvider(provider)) != ""
+	}
+}
+
+func envVarForProvider(provider models.ModelProvider) string {
+	switch provider {
+	case models.ProviderAnthropic:
+		return "ANTHROPIC_API_KEY"
+	case models.ProviderOpenAI:
+		return "OPENAI_API_KEY"
+	case models.ProviderGemini:
+		return "GEMINI_API_KEY"
+	case models.ProviderGROQ:
+		return "GROQ_API_KEY"
+	case models.ProviderOpenRouter:
+		return "OPENROUTER_API_KEY"
+	case models.ProviderXAI:
+		return "XAI_API_KEY"
+	case models.ProviderAzure:
+		return "AZURE_OPENAI_API_KEY"
+	}
+	return ""
+}
+
 // setDefaultModelForAgent sets a default model for an agent based on available providers
 func setDefaultModelForAgent(agent AgentName) bool {
 	if hasCopilotCredentials() {
@@ -871,6 +1102,159 @@ func updateCfgFile(updateCfg func(config *Config)) error {
 // It's safe to call this function multiple times.
 func Get() *Config {
 	return GetDefaultProvider().Get()
+}
+
+// DefaultModelForAgent returns the model ID that would be selected as the
+// default for the given agent based on the current provider configuration and
+// environment credentials. It does not mutate state.
+func DefaultModelForAgent(agent AgentName) models.ModelID {
+	// Use a copy of the current config so we don't mutate the global state.
+	cfgCopy := *cfg
+	originalAgents := cfgCopy.Agents
+	if originalAgents == nil {
+		originalAgents = make(map[AgentName]Agent)
+	}
+	cfgCopy.Agents = make(map[AgentName]Agent)
+	if !reselectDefaultModelTo(&cfgCopy, agent) {
+		return originalAgents[agent].Model
+	}
+	return cfgCopy.Agents[agent].Model
+}
+
+func reselectDefaultModelTo(cfg *Config, agent AgentName) bool {
+	if providerEnabledIn(cfg, models.ProviderCopilot) {
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     models.CopilotGPT4o,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	if providerEnabledIn(cfg, models.ProviderAnthropic) {
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     models.Claude37Sonnet,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	if providerEnabledIn(cfg, models.ProviderOpenAI) {
+		var model models.ModelID
+		maxTokens := int64(5000)
+		reasoningEffort := ""
+		switch agent {
+		case AgentTitle:
+			model = models.GPT41Mini
+			maxTokens = 80
+		case AgentTask:
+			model = models.GPT41Mini
+		default:
+			model = models.GPT41
+		}
+		if modelInfo, ok := models.SupportedModels[model]; ok && modelInfo.CanReason {
+			reasoningEffort = "medium"
+		}
+		cfg.Agents[agent] = Agent{
+			Model:           model,
+			MaxTokens:       maxTokens,
+			ReasoningEffort: reasoningEffort,
+		}
+		return true
+	}
+	if providerEnabledIn(cfg, models.ProviderOpenRouter) {
+		var model models.ModelID
+		maxTokens := int64(5000)
+		reasoningEffort := ""
+		switch agent {
+		case AgentTitle:
+			model = models.OpenRouterClaude35Haiku
+			maxTokens = 80
+		case AgentTask:
+			model = models.OpenRouterClaude37Sonnet
+		default:
+			model = models.OpenRouterClaude37Sonnet
+		}
+		if modelInfo, ok := models.SupportedModels[model]; ok && modelInfo.CanReason {
+			reasoningEffort = "medium"
+		}
+		cfg.Agents[agent] = Agent{
+			Model:           model,
+			MaxTokens:       maxTokens,
+			ReasoningEffort: reasoningEffort,
+		}
+		return true
+	}
+	if providerEnabledIn(cfg, models.ProviderGemini) {
+		var model models.ModelID
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			model = models.Gemini25Flash
+			maxTokens = 80
+		} else {
+			model = models.Gemini25
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     model,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	if providerEnabledIn(cfg, models.ProviderGROQ) {
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     models.QWENQwq,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	if providerEnabledIn(cfg, models.ProviderBedrock) {
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			maxTokens = 80
+		}
+		cfg.Agents[agent] = Agent{
+			Model:           models.BedrockClaude37Sonnet,
+			MaxTokens:       maxTokens,
+			ReasoningEffort: "medium",
+		}
+		return true
+	}
+	if providerEnabledIn(cfg, models.ProviderVertexAI) {
+		var model models.ModelID
+		maxTokens := int64(5000)
+		if agent == AgentTitle {
+			model = models.VertexAIGemini25Flash
+			maxTokens = 80
+		} else {
+			model = models.VertexAIGemini25
+		}
+		cfg.Agents[agent] = Agent{
+			Model:     model,
+			MaxTokens: maxTokens,
+		}
+		return true
+	}
+	return false
+}
+
+func providerEnabledIn(cfg *Config, provider models.ModelProvider) bool {
+	p, exists := cfg.Providers[provider]
+	if !exists {
+		return providerHasCredentialsEnv(provider)
+	}
+	if p.Disabled {
+		return false
+	}
+	return p.APIKey != "" || providerHasCredentialsEnv(provider)
 }
 
 // WorkingDirectory returns the current working directory from the configuration.
