@@ -1,6 +1,7 @@
 package image
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"os"
@@ -69,4 +70,9 @@ func ImagePreview(width int, filename string) (string, error) {
 	imageString := ToString(width, img)
 
 	return imageString, nil
+}
+
+func DecodeFromBytes(data []byte) (image.Image, string, error) {
+	img, format, err := image.Decode(bytes.NewReader(data))
+	return img, format, err
 }

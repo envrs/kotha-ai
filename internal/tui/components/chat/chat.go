@@ -40,6 +40,12 @@ type SelectLaunchMsg struct {
 	LaunchIdx int
 }
 
+// ImageEnlargeMsg requests opening an image in the enlarged modal view.
+type ImageEnlargeMsg struct {
+	Data   []byte
+	Format string
+}
+
 func header(width int) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Top,
