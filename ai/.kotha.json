@@ -1,0 +1,8 @@
+{
+  "$schema": "./kotha-schema.json",
+  "lsp": {
+    "gopls": {
+      "command": "gopls"
+    }
+  }
+}
