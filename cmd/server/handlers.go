@@ -203,6 +203,24 @@ func (s *Server) handleSearchSessions(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, sessions)
 }
 
+// handleDiffSessions serves GET /v1/sessions/diff?path=&old=&new=.
+func (s *Server) handleDiffSessions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	path := q.Get("path")
+	oldSessionID := q.Get("old")
+	newSessionID := q.Get("new")
+	if path == "" || oldSessionID == "" || newSessionID == "" {
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path, old, and new query parameters are required"})
+		return
+	}
+	result, err := s.app.History.DiffSessions(r.Context(), path, oldSessionID, newSessionID)
+	if err != nil {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	s.writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 	var body updateModelRequest
 	if err := s.readJSON(w, r, &body); err != nil {

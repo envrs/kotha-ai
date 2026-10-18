@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kothagpt/kotha/internal/db"
+	"github.com/kothagpt/kotha/internal/diff"
 	"github.com/kothagpt/kotha/internal/pubsub"
 )
 
@@ -38,6 +39,17 @@ type Service interface {
 	Update(ctx context.Context, file File) (File, error)
 	Delete(ctx context.Context, id string) error
 	DeleteSessionFiles(ctx context.Context, sessionID string) error
+	DiffSessions(ctx context.Context, path, oldSessionID, newSessionID string) (FileDiff, error)
+}
+
+// FileDiff holds a unified diff between two session versions of a file.
+type FileDiff struct {
+	Path       string `json:"path"`
+	OldSession string `json:"old_session"`
+	NewSession string `json:"new_session"`
+	Diff       string `json:"diff"`
+	Additions  int    `json:"additions"`
+	Removals   int    `json:"removals"`
 }
 
 type service struct {
@@ -237,6 +249,28 @@ func (s *service) DeleteSessionFiles(ctx context.Context, sessionID string) erro
 		}
 	}
 	return nil
+}
+
+// DiffSessions generates a unified diff for a file between two sessions,
+// comparing the latest version of the path in each session.
+func (s *service) DiffSessions(ctx context.Context, path, oldSessionID, newSessionID string) (FileDiff, error) {
+	oldFile, err := s.GetByPathAndSession(ctx, path, oldSessionID)
+	if err != nil {
+		return FileDiff{}, fmt.Errorf("failed to get old version: %w", err)
+	}
+	newFile, err := s.GetByPathAndSession(ctx, path, newSessionID)
+	if err != nil {
+		return FileDiff{}, fmt.Errorf("failed to get new version: %w", err)
+	}
+	diffText, additions, removals := diff.GenerateDiff(oldFile.Content, newFile.Content, path)
+	return FileDiff{
+		Path:       path,
+		OldSession: oldSessionID,
+		NewSession: newSessionID,
+		Diff:       diffText,
+		Additions:  additions,
+		Removals:   removals,
+	}, nil
 }
 
 func (s *service) fromDBItem(item db.File) File {
