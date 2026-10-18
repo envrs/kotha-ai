@@ -16,6 +16,7 @@ import (
 	"github.com/kothagpt/kotha/internal/format"
 	"github.com/kothagpt/kotha/internal/history"
 	"github.com/kothagpt/kotha/internal/llm/agent"
+	"github.com/kothagpt/kotha/internal/plugin"
 	"github.com/kothagpt/kotha/internal/logging"
 	"github.com/kothagpt/kotha/internal/lsp"
 	"github.com/kothagpt/kotha/internal/message"
@@ -35,6 +36,10 @@ type App struct {
 	ToolCalls   toolcall.Service
 	Symbols     symbol.Service
 	CoderAgent  agent.Service
+
+	// PromptChain holds prompt interceptors that run before user prompts
+	// are admitted to the agent. Public so callers can register hooks.
+	PromptChain *plugin.Chain
 
 	Meter *observability.Meter
 
@@ -66,6 +71,7 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		Permissions:    permission.NewPermissionService(),
 		LSPClients:     make(map[string]*lsp.Client),
 		configProvider: provider,
+		PromptChain:    plugin.NewChain(),
 		Meter:          observability.NewMeter(),
 	}
 
@@ -96,6 +102,7 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		),
 		provider,
 		logging.GetDefaultLogger(),
+		agent.WithPromptChain(app.PromptChain),
 	)
 	if err != nil {
 		logging.Error("Failed to create coder agent", err)

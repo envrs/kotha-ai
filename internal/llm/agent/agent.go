@@ -19,6 +19,7 @@ import (
 	"github.com/kothagpt/kotha/internal/observability"
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/permission"
+	"github.com/kothagpt/kotha/internal/plugin"
 	"github.com/kothagpt/kotha/internal/pubsub"
 	"github.com/kothagpt/kotha/internal/session"
 	"github.com/kothagpt/kotha/internal/toolcall"
@@ -82,6 +83,20 @@ type agent struct {
 	// fileLock coordinates edits to the same file across concurrent
 	// agent sessions. Nil when coordination is disabled.
 	fileLock *FileLock
+
+	// promptChain intercepts user prompts before admission (persistence
+	// and LLM dispatch). Nil-safe: no interceptors when nil.
+	promptChain *plugin.Chain
+}
+
+// AgentOption customizes an agent at construction.
+type AgentOption func(*agent)
+
+// WithPromptChain installs a prompt-interceptor chain. Every prompt is run
+// through the chain before it is persisted or sent to the provider; a
+// rejection produces an error event instead of starting a run.
+func WithPromptChain(chain *plugin.Chain) AgentOption {
+	return func(a *agent) { a.promptChain = chain }
 }
 
 func NewAgent(
@@ -92,6 +107,7 @@ func NewAgent(
 	agentTools []tools.BaseTool,
 	configProvider config.ConfigProvider,
 	logger logging.Logger,
+	opts ...AgentOption,
 ) (Service, error) {
 	agentProvider, err := createAgentProvider(agentName, configProvider)
 	if err != nil {
@@ -127,6 +143,12 @@ func NewAgent(
 		logger:            logger,
 		meter:             observability.NewMeter(),
 		fileLock:          NewFileLock(30 * time.Second),
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(agent)
+		}
 	}
 
 	return agent, nil
@@ -220,11 +242,22 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	if !a.provider.Model().SupportsAttachments && attachments != nil {
 		attachments = nil
 	}
-	events := make(chan AgentEvent, 1)
+
+	// Plugin admission gate: run prompt interceptors before anything is
+	// persisted or dispatched. A rejection surfaces as an error event.
+	content, attachments, admitErr := a.admitPrompt(ctx, sessionID, content, attachments)
+	if admitErr != nil {
+		events := make(chan AgentEvent, 1)
+		events <- a.err(admitErr)
+		close(events)
+		return events, nil
+	}
+
 	if a.IsSessionBusy(sessionID) {
 		return nil, ErrSessionBusy
 	}
 
+	events := make(chan AgentEvent, 1)
 	genCtx, cancel := context.WithCancel(ctx)
 
 	a.activeRequests.Store(sessionID, cancel)
@@ -262,6 +295,29 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		concurrency.Send(genCtx, events, result)
 	}()
 	return events, nil
+}
+
+// admitPrompt runs the prompt-interceptor chain (if installed) against the
+// user prompt. Interceptors may rewrite the content or attachments; a
+// rejection (including an empty rewrite) is returned as an error.
+func (a *agent) admitPrompt(ctx context.Context, sessionID, content string, attachments []message.Attachment) (string, []message.Attachment, error) {
+	if a.promptChain == nil || a.promptChain.Len() == 0 {
+		return content, attachments, nil
+	}
+
+	req := &plugin.PromptRequest{
+		SessionID:   sessionID,
+		Content:     content,
+		Attachments: attachments,
+	}
+	if err := a.promptChain.Intercept(ctx, req); err != nil {
+		return "", nil, err
+	}
+
+	if strings.TrimSpace(req.Content) == "" {
+		return "", nil, &plugin.BlockedError{Interceptor: "agent", Reason: "prompt is empty after interceptors"}
+	}
+	return req.Content, req.Attachments, nil
 }
 
 func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
