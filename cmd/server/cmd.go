@@ -95,7 +95,7 @@ func runDaemon(cfg ServerConfig) error {
 		if err != nil {
 			return err
 		}
-		defer logFile.Close()
+		defer func() { _ = logFile.Close() }()
 		c.Stdout = logFile
 		c.Stderr = logFile
 	} else {
