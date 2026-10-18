@@ -95,7 +95,7 @@ func (l *lsTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 		return NewTextErrorResponse(fmt.Sprintf("error parsing parameters: %s", err)), nil
 	}
 
-	searchPath := params.Path
+	searchPath := fileutil.ExpandTilde(params.Path)
 	if searchPath == "" {
 		searchPath = config.WorkingDirectory()
 	}

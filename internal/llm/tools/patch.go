@@ -10,6 +10,7 @@ import (
 
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/diff"
+	"github.com/kothagpt/kotha/internal/fileutil"
 	"github.com/kothagpt/kotha/internal/history"
 	"github.com/kothagpt/kotha/internal/logging"
 	"github.com/kothagpt/kotha/internal/lsp"
@@ -99,7 +100,7 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	// Identify all files needed for the patch and verify they've been read
 	filesToRead := diff.IdentifyFilesNeeded(params.PatchText)
 	for _, filePath := range filesToRead {
-		absPath := filePath
+		absPath := fileutil.ExpandTilde(filePath)
 		if !filepath.IsAbs(absPath) {
 			wd := config.WorkingDirectory()
 			absPath = filepath.Join(wd, absPath)
@@ -134,7 +135,7 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	// Check for new files to ensure they don't already exist
 	filesToAdd := diff.IdentifyFilesAdded(params.PatchText)
 	for _, filePath := range filesToAdd {
-		absPath := filePath
+		absPath := fileutil.ExpandTilde(filePath)
 		if !filepath.IsAbs(absPath) {
 			wd := config.WorkingDirectory()
 			absPath = filepath.Join(wd, absPath)
@@ -151,7 +152,7 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	// Load all required files
 	currentFiles := make(map[string]string)
 	for _, filePath := range filesToRead {
-		absPath := filePath
+		absPath := fileutil.ExpandTilde(filePath)
 		if !filepath.IsAbs(absPath) {
 			wd := config.WorkingDirectory()
 			absPath = filepath.Join(wd, absPath)
@@ -259,7 +260,7 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 
 	// Apply the changes to the filesystem
 	err = diff.ApplyCommit(commit, func(path string, content string) error {
-		absPath := path
+		absPath := fileutil.ExpandTilde(path)
 		if !filepath.IsAbs(absPath) {
 			wd := config.WorkingDirectory()
 			absPath = filepath.Join(wd, absPath)
@@ -273,7 +274,7 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 
 		return os.WriteFile(absPath, []byte(content), 0o644)
 	}, func(path string) error {
-		absPath := path
+		absPath := fileutil.ExpandTilde(path)
 		if !filepath.IsAbs(absPath) {
 			wd := config.WorkingDirectory()
 			absPath = filepath.Join(wd, absPath)
@@ -290,7 +291,7 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	totalRemovals := 0
 
 	for path, change := range commit.Changes {
-		absPath := path
+		absPath := fileutil.ExpandTilde(path)
 		if !filepath.IsAbs(absPath) {
 			wd := config.WorkingDirectory()
 			absPath = filepath.Join(wd, absPath)

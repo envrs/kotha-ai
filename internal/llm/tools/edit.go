@@ -11,6 +11,7 @@ import (
 
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/diff"
+	"github.com/kothagpt/kotha/internal/fileutil"
 	"github.com/kothagpt/kotha/internal/history"
 	"github.com/kothagpt/kotha/internal/logging"
 	"github.com/kothagpt/kotha/internal/lsp"
@@ -130,6 +131,9 @@ func (e *editTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	if params.FilePath == "" {
 		return NewTextErrorResponse("file_path is required"), nil
 	}
+
+	// Expand tilde in file path
+	params.FilePath = fileutil.ExpandTilde(params.FilePath)
 
 	if !filepath.IsAbs(params.FilePath) {
 		wd := config.WorkingDirectory()

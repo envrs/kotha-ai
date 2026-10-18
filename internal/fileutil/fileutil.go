@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -160,4 +161,64 @@ func GlobWithDoublestar(pattern, searchPath string, limit int) ([]string, bool, 
 		results[i] = m.Path
 	}
 	return results, truncated, nil
+}
+
+// ExpandTilde expands a leading tilde (~) in a path to the user's home directory.
+// It handles:
+//
+//	- ~         -> $HOME
+//	- ~/path    -> $HOME/path
+//	- ~\path    -> $HOME\path (Windows)
+//	- ~user/... -> (not expanded, left as-is for security)
+//
+// Paths like ~draft.md (no separator after ~) are left unchanged.
+// Returns the original path if no expansion is needed or possible.
+func ExpandTilde(path string) string {
+	if path == "" {
+		return path
+	}
+
+	// Check for leading tilde
+	if !strings.HasPrefix(path, "~") {
+		return path
+	}
+
+	// If path is just "~" or starts with "~/" or "~\"
+	if len(path) == 1 || (len(path) > 1 && (path[1] == '/' || (runtime.GOOS == "windows" && path[1] == '\\'))) {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			// Fallback: try environment variables
+			home = os.Getenv("HOME")
+			if home == "" {
+				home = os.Getenv("USERPROFILE")
+			}
+			if home == "" {
+				return path // Cannot expand, return original
+			}
+		}
+		if len(path) == 1 {
+			return home
+		}
+		return filepath.Join(home, path[2:])
+	}
+
+	// Path starts with ~ but not followed by separator (e.g., ~draft.md)
+	// Do not expand - leave as literal
+	return path
+}
+
+// MustExpandTilde is like ExpandTilde but panics if expansion fails.
+// Use only when the path is guaranteed to be expandable (e.g., in tests).
+func MustExpandTilde(path string) string {
+	if path == "" {
+		panic("expand tilde: empty path")
+	}
+	expanded := ExpandTilde(path)
+	if expanded == path && strings.HasPrefix(path, "~") {
+		// Path starts with ~ but wasn't expanded (e.g., ~user/file)
+		// This is a security feature - we don't expand ~user/ paths
+		// But for MustExpandTilde, we consider this a failure to expand
+		panic(fmt.Sprintf("expand tilde: cannot expand %q", path))
+	}
+	return expanded
 }

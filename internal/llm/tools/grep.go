@@ -137,7 +137,7 @@ func (g *grepTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		searchPattern = escapeRegexPattern(params.Pattern)
 	}
 
-	searchPath := params.Path
+	searchPath := fileutil.ExpandTilde(params.Path)
 	if searchPath == "" {
 		searchPath = config.WorkingDirectory()
 	}

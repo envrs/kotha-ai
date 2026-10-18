@@ -11,6 +11,7 @@ import (
 
 	"github.com/kothagpt/kotha/internal/concurrency"
 	"github.com/kothagpt/kotha/internal/config"
+	"github.com/kothagpt/kotha/internal/fileutil"
 	"github.com/kothagpt/kotha/internal/llm/models"
 	"github.com/kothagpt/kotha/internal/llm/prompt"
 	"github.com/kothagpt/kotha/internal/llm/provider"
@@ -980,6 +981,7 @@ func (a *agent) Meter() *observability.Meter {
 
 // extractFilePath pulls a file_path field out of a tool call's JSON input.
 // Returns "" for tools that don't operate on files.
+// Expands tilde (~) in the path so lock keys match the expanded paths used by tools.
 func extractFilePath(input string) string {
 	if input == "" {
 		return ""
@@ -990,5 +992,5 @@ func extractFilePath(input string) string {
 	if err := json.Unmarshal([]byte(input), &parsed); err != nil {
 		return ""
 	}
-	return parsed.FilePath
+	return fileutil.ExpandTilde(parsed.FilePath)
 }
