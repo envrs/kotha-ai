@@ -28,12 +28,13 @@ INSERT INTO symbols (
     session_id,
     file_path,
     name,
+    kind,
     "range",
     container_name,
     language,
     created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now')
+    ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now')
 )
 RETURNING id, session_id, file_path, name, kind, "range", container_name, language, created_at
 `
@@ -50,7 +51,7 @@ type CreateSymbolParams struct {
 }
 
 func (q *Queries) CreateSymbol(ctx context.Context, arg CreateSymbolParams) (Symbol, error) {
-	row := q.queryRow(ctx, q.createSymbolStmt, createSymbol,
+row := q.queryRow(ctx, q.createSymbolStmt, createSymbol,
 		arg.ID,
 		arg.SessionID,
 		arg.FilePath,

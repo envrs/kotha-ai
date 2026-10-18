@@ -128,8 +128,8 @@
 - [ ] Troubleshooting guide
 
 ### Testing & Hardening
-- [ ] Integration tests (mock LLM, file system)
-- [ ] Performance benchmarks
+- [x] Integration tests (mock LLM, file system)
+- [x] Performance benchmarks
 - [ ] Security audit (input validation, secrets handling)
 
 ## Phase 9: Advanced Features (Week 12+)
