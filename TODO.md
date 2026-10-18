@@ -50,11 +50,11 @@
 - [x] Create new session, resume session, list sessions
 - [x] Save conversation history to SQLite
 - [x] Export session as JSON/text
-- [ ] Share links (local URL or cloud integration)
+- [x] Share links (local URL or cloud integration)
 
 ### History & Recall
 - [x] Search past sessions (semantic or keyword)
-- [ ] Recall context from previous runs
+- [x] Recall context from previous runs
 - [x] Diff view for changes across sessions
 
 ## Phase 4: Terminal UI (Week 6)
