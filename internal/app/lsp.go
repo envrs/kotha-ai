@@ -54,6 +54,14 @@ func (app *App) createAndStartLSPClient(ctx context.Context, provider config.Con
 	} else {
 		logging.Info("LSP server is ready", "name", name)
 		lspClient.SetServerState(lsp.StateReady)
+		// Index symbols from the workspace in the background
+		go func() {
+			if err := app.IndexSymbols(context.Background(), name, lspClient); err != nil {
+				logging.Warn("Symbol indexing failed", "name", name, "error", err)
+			} else {
+				logging.Info("Symbol indexing complete", "name", name)
+			}
+		}()
 	}
 
 	logging.Info("LSP client initialized", "name", name)

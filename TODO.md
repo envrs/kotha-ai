@@ -30,14 +30,14 @@
 ### Project Context
 - [x] Parse `.gitignore`, respect file exclusions
 - [x] Scan repo for language-specific files (detect Go, Python, JS, etc.)
-- [ ] Extract code symbols (classes, functions, imports) via LSP
+- [x] Extract code symbols (classes, functions, imports) via LSP
 - [x] Build context window efficiently (token budgeting)
 
 ### LSP Integration
 - [x] `internal/lsp/` — spawn LSP servers per language
 - [x] Hover info, go-to-definition, code completion
 - [x] Diagnostics/errors extraction
-- [ ] Symbol indexing for cross-file references
+- [x] Symbol indexing for cross-file references
 
 ## Phase 3: Session & Persistence (Week 5)
 
