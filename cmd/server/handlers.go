@@ -169,6 +169,40 @@ func (s *Server) handleCurrentModel(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, m)
 }
 
+// handleListToolCalls serves GET /v1/sessions/{session_id}/tool_calls.
+func (s *Server) handleListToolCalls(w http.ResponseWriter, r *http.Request) {
+	if s.app.ToolCalls == nil {
+		s.writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	calls, err := s.app.ToolCalls.ListBySession(r.Context(), s.sessionID(r))
+	if err != nil {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	s.writeJSON(w, http.StatusOK, calls)
+}
+
+// handleSearchSessions serves GET /v1/sessions/search?q=.
+func (s *Server) handleSearchSessions(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		sessions, err := s.app.Sessions.List(r.Context())
+		if err != nil {
+			s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		s.writeJSON(w, http.StatusOK, sessions)
+		return
+	}
+	sessions, err := s.app.Sessions.Search(r.Context(), query)
+	if err != nil {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	s.writeJSON(w, http.StatusOK, sessions)
+}
+
 func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 	var body updateModelRequest
 	if err := s.readJSON(w, r, &body); err != nil {

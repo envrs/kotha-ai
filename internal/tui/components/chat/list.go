@@ -54,6 +54,7 @@ type MessageKeys struct {
 	PageUp       key.Binding
 	HalfPageUp   key.Binding
 	HalfPageDown key.Binding
+	Copy         key.Binding
 }
 
 var messageKeys = MessageKeys{
@@ -72,6 +73,10 @@ var messageKeys = MessageKeys{
 	HalfPageDown: key.NewBinding(
 		key.WithKeys("ctrl+d", "ctrl+d"),
 		key.WithHelp("ctrl+d", "½ page down"),
+	),
+	Copy: key.NewBinding(
+		key.WithKeys("c"),
+		key.WithHelp("c", "copy message"),
 	),
 }
 

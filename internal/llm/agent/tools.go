@@ -11,12 +11,14 @@ import (
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/permission"
 	"github.com/kothagpt/kotha/internal/session"
+	"github.com/kothagpt/kotha/internal/toolcall"
 )
 
 func CoderAgentTools(
 	permissions permission.Service,
 	sessions session.Service,
 	messages message.Service,
+	toolcalls toolcall.Service,
 	history history.Service,
 	lspClients map[string]*lsp.Client,
 	configProvider config.ConfigProvider,
@@ -39,7 +41,7 @@ func CoderAgentTools(
 			tools.NewViewTool(lspClients),
 			tools.NewPatchTool(lspClients, permissions, history),
 			tools.NewWriteTool(lspClients, permissions, history),
-			NewAgentTool(sessions, messages, lspClients, configProvider, logger),
+			NewAgentTool(sessions, messages, toolcalls, lspClients, configProvider, logger),
 		}, otherTools...,
 	)
 }

@@ -23,6 +23,7 @@ var (
 	apiTimeout     time.Duration
 	apiFormat      string
 	apiAPIKey      string
+	apiSearch      string
 )
 
 // Cmd is the `kotha api` subcommand that talks to a running server.

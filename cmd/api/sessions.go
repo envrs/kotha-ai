@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,11 @@ var sessionsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := NewClient(serverFlag(cmd))
 		var out []session
-		if err := c.GET(context.Background(), "/v1/sessions", &out); err != nil {
+		path := "/v1/sessions"
+		if apiSearch != "" {
+			path = "/v1/sessions/search?q=" + apiSearch
+		}
+		if err := c.GET(context.Background(), path, &out); err != nil {
 			return err
 		}
 		b, _ := json.MarshalIndent(out, "", "  ")
@@ -45,4 +50,7 @@ var sessionCmd = &cobra.Command{
 
 func init() {
 	sessionCmd.Flags().StringVar(&apiSession, "session", "", "session ID (required)")
+	sessionsCmd.Flags().StringVar(&apiSearch, "search", "", "keyword search across session titles and messages")
 }
+
+var _ = strings.TrimSpace

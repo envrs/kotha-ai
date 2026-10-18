@@ -11,11 +11,13 @@ import (
 	"github.com/kothagpt/kotha/internal/lsp"
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/session"
+	"github.com/kothagpt/kotha/internal/toolcall"
 )
 
 type agentTool struct {
 	sessions   session.Service
 	messages   message.Service
+	toolcalls  toolcall.Service
 	lspClients map[string]*lsp.Client
 
 	configProvider config.ConfigProvider
@@ -58,7 +60,7 @@ func (b *agentTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolRes
 		return tools.ToolResponse{}, fmt.Errorf("session_id and message_id are required")
 	}
 
-	agent, err := NewAgent(config.AgentTask, b.sessions, b.messages, TaskAgentTools(b.lspClients), b.configProvider, b.logger)
+	agent, err := NewAgent(config.AgentTask, b.sessions, b.messages, b.toolcalls, TaskAgentTools(b.lspClients), b.configProvider, b.logger)
 	if err != nil {
 		return tools.ToolResponse{}, fmt.Errorf("error creating agent: %s", err)
 	}
@@ -103,15 +105,17 @@ func (b *agentTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolRes
 func NewAgentTool(
 	Sessions session.Service,
 	Messages message.Service,
+	Toolcalls toolcall.Service,
 	LspClients map[string]*lsp.Client,
 	configProvider config.ConfigProvider,
 	logger logging.Logger,
 ) tools.BaseTool {
 	return &agentTool{
-		sessions:       Sessions,
-		messages:       Messages,
-		lspClients:     LspClients,
+		sessions:      Sessions,
+		messages:      Messages,
+		toolcalls:     Toolcalls,
+		lspClients:    LspClients,
 		configProvider: configProvider,
-		logger:         logger,
+		logger:        logger,
 	}
 }

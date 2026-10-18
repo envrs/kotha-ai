@@ -19,6 +19,7 @@ import (
 	"github.com/kothagpt/kotha/internal/permission"
 	"github.com/kothagpt/kotha/internal/pubsub"
 	"github.com/kothagpt/kotha/internal/session"
+	"github.com/kothagpt/kotha/internal/toolcall"
 )
 
 // Common errors
@@ -61,6 +62,7 @@ type agent struct {
 	*pubsub.Broker[AgentEvent]
 	sessions session.Service
 	messages message.Service
+	toolcalls toolcall.Service
 
 	tools    []tools.BaseTool
 	provider provider.Provider
@@ -78,6 +80,7 @@ func NewAgent(
 	agentName config.AgentName,
 	sessions session.Service,
 	messages message.Service,
+	toolcalls toolcall.Service,
 	agentTools []tools.BaseTool,
 	configProvider config.ConfigProvider,
 	logger logging.Logger,
@@ -107,6 +110,7 @@ func NewAgent(
 		provider:          agentProvider,
 		messages:          messages,
 		sessions:          sessions,
+		toolcalls:        toolcalls,
 		tools:             agentTools,
 		titleProvider:     titleProvider,
 		summarizeProvider: summarizeProvider,
@@ -408,11 +412,14 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				}
 				continue
 			}
+			start := time.Now()
 			toolResult, toolErr := tool.Run(ctx, tools.ToolCall{
 				ID:    toolCall.ID,
 				Name:  toolCall.Name,
 				Input: toolCall.Input,
 			})
+			// Record the tool invocation for history and cost auditing.
+			a.recordToolCall(ctx, sessionID, assistantMsg.ID, toolCall, toolResult, toolErr, time.Since(start))
 			if toolErr != nil {
 				if errors.Is(toolErr, permission.ErrorPermissionDenied) {
 					toolResults[i] = message.ToolResult{
@@ -461,6 +468,29 @@ out:
 func (a *agent) finishMessage(ctx context.Context, msg *message.Message, finishReson message.FinishReason) {
 	msg.AddFinish(finishReson)
 	_ = a.messages.Update(ctx, *msg)
+}
+
+// recordToolCall persists a tool invocation for history and cost auditing.
+// Failures here are non-fatal: a lost audit record must never break the agent.
+func (a *agent) recordToolCall(ctx context.Context, sessionID, messageID string, call message.ToolCall, result tools.ToolResponse, runErr error, duration time.Duration) {
+	if a.toolcalls == nil {
+		return
+	}
+	isError := runErr != nil || result.IsError
+	output := result.Content
+	if runErr != nil {
+		output = runErr.Error()
+	}
+	_, _ = a.toolcalls.Create(ctx, toolcall.ToolCall{
+		SessionID:  sessionID,
+		MessageID:  messageID,
+		ToolCallID: call.ID,
+		ToolName:   call.Name,
+		Input:      call.Input,
+		Output:     output,
+		IsError:    isError,
+		DurationMs: duration.Milliseconds(),
+	})
 }
 
 func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg *message.Message, event provider.ProviderEvent) error {

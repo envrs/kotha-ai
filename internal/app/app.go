@@ -21,6 +21,7 @@ import (
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/permission"
 	"github.com/kothagpt/kotha/internal/session"
+	"github.com/kothagpt/kotha/internal/toolcall"
 	"github.com/kothagpt/kotha/internal/tui/theme"
 )
 
@@ -29,6 +30,7 @@ type App struct {
 	Messages    message.Service
 	History     history.Service
 	Permissions permission.Service
+	ToolCalls   toolcall.Service
 
 	CoderAgent agent.Service
 
@@ -48,11 +50,13 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 	sessions := session.NewService(q)
 	messages := message.NewService(q)
 	files := history.NewService(q, conn)
+	toolcalls := toolcall.NewService(q)
 
 	app := &App{
 		Sessions:       sessions,
 		Messages:       messages,
 		History:        files,
+		ToolCalls:      toolcalls,
 		Permissions:    permission.NewPermissionService(),
 		LSPClients:     make(map[string]*lsp.Client),
 		configProvider: provider,
@@ -72,10 +76,12 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		config.AgentCoder,
 		app.Sessions,
 		app.Messages,
+		app.ToolCalls,
 		agent.CoderAgentTools(
 			app.Permissions,
 			app.Sessions,
 			app.Messages,
+			app.ToolCalls,
 			app.History,
 			app.LSPClients,
 			provider,

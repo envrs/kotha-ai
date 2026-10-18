@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"database/sql"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/kothagpt/kotha/internal/db"
@@ -31,6 +32,7 @@ type Service interface {
 	List(ctx context.Context) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
 	Delete(ctx context.Context, id string) error
+	Search(ctx context.Context, query string) ([]Session, error)
 }
 
 type service struct {
@@ -84,6 +86,11 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	// Explicitly delete dependent rows so deletion works regardless of
+	// foreign-key cascade support in the underlying SQLite build.
+	_ = s.q.DeleteSessionFiles(ctx, session.ID)
+	_ = s.q.DeleteSessionMessages(ctx, session.ID)
+	_ = s.q.DeleteSessionToolCalls(ctx, session.ID)
 	err = s.q.DeleteSession(ctx, session.ID)
 	if err != nil {
 		return err
@@ -122,6 +129,24 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 
 func (s *service) List(ctx context.Context) ([]Session, error) {
 	dbSessions, err := s.q.ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]Session, len(dbSessions))
+	for i, dbSession := range dbSessions {
+		sessions[i] = s.fromDBItem(dbSession)
+	}
+	return sessions, nil
+}
+
+// Search performs a case-insensitive keyword match against session titles
+// and message bodies, returning root sessions ordered by recency.
+func (s *service) Search(ctx context.Context, query string) ([]Session, error) {
+	pattern := "%" + strings.ReplaceAll(query, "%", "\\%") + "%"
+	dbSessions, err := s.q.SearchSessions(ctx, db.SearchSessionsParams{
+		TitlePattern: pattern,
+		BodyPattern:  pattern,
+	})
 	if err != nil {
 		return nil, err
 	}

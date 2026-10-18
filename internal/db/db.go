@@ -87,6 +87,30 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.updateSessionStmt, err = db.PrepareContext(ctx, updateSession); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateSession: %w", err)
 	}
+	if q.createToolCallStmt, err = db.PrepareContext(ctx, createToolCall); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateToolCall: %w", err)
+	}
+	if q.getToolCallStmt, err = db.PrepareContext(ctx, getToolCall); err != nil {
+		return nil, fmt.Errorf("error preparing query GetToolCall: %w", err)
+	}
+	if q.getToolCallByToolCallIDStmt, err = db.PrepareContext(ctx, getToolCallByToolCallID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetToolCallByToolCallID: %w", err)
+	}
+	if q.listToolCallsBySessionStmt, err = db.PrepareContext(ctx, listToolCallsBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query ListToolCallsBySession: %w", err)
+	}
+	if q.listToolCallsByMessageStmt, err = db.PrepareContext(ctx, listToolCallsByMessage); err != nil {
+		return nil, fmt.Errorf("error preparing query ListToolCallsByMessage: %w", err)
+	}
+	if q.deleteToolCallStmt, err = db.PrepareContext(ctx, deleteToolCall); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteToolCall: %w", err)
+	}
+	if q.deleteSessionToolCallsStmt, err = db.PrepareContext(ctx, deleteSessionToolCalls); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSessionToolCalls: %w", err)
+	}
+	if q.searchSessionsStmt, err = db.PrepareContext(ctx, searchSessions); err != nil {
+		return nil, fmt.Errorf("error preparing query SearchSessions: %w", err)
+	}
 	return &q, nil
 }
 
@@ -197,6 +221,46 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing updateSessionStmt: %w", cerr)
 		}
 	}
+	if q.createToolCallStmt != nil {
+		if cerr := q.createToolCallStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createToolCallStmt: %w", cerr)
+		}
+	}
+	if q.getToolCallStmt != nil {
+		if cerr := q.getToolCallStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getToolCallStmt: %w", cerr)
+		}
+	}
+	if q.getToolCallByToolCallIDStmt != nil {
+		if cerr := q.getToolCallByToolCallIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getToolCallByToolCallIDStmt: %w", cerr)
+		}
+	}
+	if q.listToolCallsBySessionStmt != nil {
+		if cerr := q.listToolCallsBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listToolCallsBySessionStmt: %w", cerr)
+		}
+	}
+	if q.listToolCallsByMessageStmt != nil {
+		if cerr := q.listToolCallsByMessageStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listToolCallsByMessageStmt: %w", cerr)
+		}
+	}
+	if q.deleteToolCallStmt != nil {
+		if cerr := q.deleteToolCallStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteToolCallStmt: %w", cerr)
+		}
+	}
+	if q.deleteSessionToolCallsStmt != nil {
+		if cerr := q.deleteSessionToolCallsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSessionToolCallsStmt: %w", cerr)
+		}
+	}
+	if q.searchSessionsStmt != nil {
+		if cerr := q.searchSessionsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing searchSessionsStmt: %w", cerr)
+		}
+	}
 	return err
 }
 
@@ -257,6 +321,14 @@ type Queries struct {
 	updateFileStmt              *sql.Stmt
 	updateMessageStmt           *sql.Stmt
 	updateSessionStmt           *sql.Stmt
+	createToolCallStmt          *sql.Stmt
+	getToolCallStmt             *sql.Stmt
+	getToolCallByToolCallIDStmt *sql.Stmt
+	listToolCallsBySessionStmt  *sql.Stmt
+	listToolCallsByMessageStmt  *sql.Stmt
+	deleteToolCallStmt          *sql.Stmt
+	deleteSessionToolCallsStmt  *sql.Stmt
+	searchSessionsStmt          *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
@@ -284,5 +356,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateFileStmt:              q.updateFileStmt,
 		updateMessageStmt:           q.updateMessageStmt,
 		updateSessionStmt:           q.updateSessionStmt,
+		createToolCallStmt:          q.createToolCallStmt,
+		getToolCallStmt:             q.getToolCallStmt,
+		getToolCallByToolCallIDStmt: q.getToolCallByToolCallIDStmt,
+		listToolCallsBySessionStmt:  q.listToolCallsBySessionStmt,
+		listToolCallsByMessageStmt:  q.listToolCallsByMessageStmt,
+		deleteToolCallStmt:          q.deleteToolCallStmt,
+		deleteSessionToolCallsStmt:  q.deleteSessionToolCallsStmt,
+		searchSessionsStmt:          q.searchSessionsStmt,
 	}
 }
