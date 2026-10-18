@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -71,6 +72,8 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			return p, cmd
 		}
+	case chat.CopyFocusedMsg:
+		return p, p.copyFocusedMessage()
 	case dialog.CommandRunCustomMsg:
 		// Check if the agent is busy before executing custom commands
 		if p.app.CoderAgent.IsBusy() {
@@ -150,6 +153,35 @@ func (p *chatPage) setSidebar() tea.Cmd {
 
 func (p *chatPage) clearSidebar() tea.Cmd {
 	return p.layout.ClearRightPanel()
+}
+
+// copyFocusedMessage copies the last assistant message content to the
+// system clipboard and reports the result.
+func (p *chatPage) copyFocusedMessage() tea.Cmd {
+	if p.session.ID == "" {
+		return util.ReportWarn("No session selected")
+	}
+	msgs, err := p.app.Messages.List(context.Background(), p.session.ID)
+	if err != nil {
+		return util.ReportError(err)
+	}
+	var lastMsg *message.Message
+	for i := range msgs {
+		if msgs[i].Role == message.Assistant {
+			lastMsg = &msgs[i]
+		}
+	}
+	if lastMsg == nil {
+		return util.ReportWarn("No assistant message to copy")
+	}
+	content := lastMsg.Content().String()
+	if content == "" {
+		return util.ReportWarn("Message is empty")
+	}
+	if err := clipboard.WriteAll(content); err != nil {
+		return util.ReportError(err)
+	}
+	return util.ReportInfo("Copied to clipboard")
 }
 
 func (p *chatPage) sendMessage(text string, attachments []message.Attachment) tea.Cmd {

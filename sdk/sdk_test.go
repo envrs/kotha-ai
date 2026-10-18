@@ -38,6 +38,10 @@ func (f *fakeSession) List(_ context.Context) ([]session.Session, error) {
 	return append([]session.Session(nil), f.sessions...), nil
 }
 
+func (f *fakeSession) Search(_ context.Context, _ string) ([]session.Session, error) {
+	return append([]session.Session(nil), f.sessions...), nil
+}
+
 func (f *fakeSession) Save(_ context.Context, s session.Session) (session.Session, error) {
 	return s, nil
 }

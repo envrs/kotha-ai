@@ -11,16 +11,16 @@ import (
 )
 
 type ToolCall struct {
-	ID          string          `json:"id"`
-	SessionID   string          `json:"session_id"`
-	MessageID   sql.NullString  `json:"message_id"`
-	ToolCallID  string          `json:"tool_call_id"`
-	ToolName    string          `json:"tool_name"`
-	Input       sql.NullString  `json:"input"`
-	Output      sql.NullString  `json:"output"`
-	IsError     int64           `json:"is_error"`
-	DurationMs  int64           `json:"duration_ms"`
-	CreatedAt   int64           `json:"created_at"`
+	ID         string         `json:"id"`
+	SessionID  string         `json:"session_id"`
+	MessageID  sql.NullString `json:"message_id"`
+	ToolCallID string         `json:"tool_call_id"`
+	ToolName   string         `json:"tool_name"`
+	Input      sql.NullString `json:"input"`
+	Output     sql.NullString `json:"output"`
+	IsError    int64          `json:"is_error"`
+	DurationMs int64          `json:"duration_ms"`
+	CreatedAt  int64          `json:"created_at"`
 }
 
 const createToolCall = `-- name: CreateToolCall :one

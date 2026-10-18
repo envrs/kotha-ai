@@ -44,16 +44,16 @@
 ### Database Schema
 - [x] Sessions table: ID, name, created, updated, status
 - [x] Messages table: session_id, role, content, timestamp
-- [ ] Tools/calls table: track tool invocations and results
+- [x] Tools/calls table: track tool invocations and results
 
 ### Session Management
-- [ ] Create new session, resume session, list sessions
-- [ ] Save conversation history to SQLite
+- [x] Create new session, resume session, list sessions
+- [x] Save conversation history to SQLite
 - [x] Export session as JSON/text
 - [ ] Share links (local URL or cloud integration)
 
 ### History & Recall
-- [ ] Search past sessions (semantic or keyword)
+- [x] Search past sessions (semantic or keyword)
 - [ ] Recall context from previous runs
 - [ ] Diff view for changes across sessions
 
@@ -67,9 +67,9 @@
 - [ ] Help modal, keybindings display
 
 ### Interactivity
-- [ ] Streaming output (real-time token rendering)
-- [ ] Copy/paste support
-- [ ] Interrupt (Ctrl+C) to cancel ongoing request
+- [x] Streaming output (real-time token rendering)
+- [x] Copy/paste support
+- [x] Interrupt (Ctrl+C) to cancel ongoing request
 - [ ] Session switching without restart
 - [ ] Scroll through history
 

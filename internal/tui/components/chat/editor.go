@@ -183,6 +183,9 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			key.Matches(msg, messageKeys.HalfPageUp) || key.Matches(msg, messageKeys.HalfPageDown) {
 			return m, nil
 		}
+		if key.Matches(msg, messageKeys.Copy) && m.textarea.Value() == "" {
+			return m, util.CmdHandler(CopyFocusedMsg{})
+		}
 		if key.Matches(msg, editorMaps.OpenEditor) {
 			if m.app.CoderAgent.IsSessionBusy(m.session.ID) {
 				return m, util.ReportWarn("Agent is working, please wait...")

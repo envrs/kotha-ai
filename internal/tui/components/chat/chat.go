@@ -25,6 +25,9 @@ type SessionClearedMsg struct{}
 
 type EditorFocusMsg bool
 
+// CopyFocusedMsg requests copying the focused message content to clipboard.
+type CopyFocusedMsg struct{}
+
 func header(width int) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Top,

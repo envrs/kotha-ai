@@ -60,8 +60,8 @@ type Service interface {
 
 type agent struct {
 	*pubsub.Broker[AgentEvent]
-	sessions session.Service
-	messages message.Service
+	sessions  session.Service
+	messages  message.Service
 	toolcalls toolcall.Service
 
 	tools    []tools.BaseTool
@@ -110,7 +110,7 @@ func NewAgent(
 		provider:          agentProvider,
 		messages:          messages,
 		sessions:          sessions,
-		toolcalls:        toolcalls,
+		toolcalls:         toolcalls,
 		tools:             agentTools,
 		titleProvider:     titleProvider,
 		summarizeProvider: summarizeProvider,

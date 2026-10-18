@@ -13,16 +13,16 @@ import (
 
 // ToolCall records a single tool invocation made by the agent.
 type ToolCall struct {
-	ID          string
-	SessionID   string
-	MessageID   string
-	ToolCallID  string
-	ToolName    string
-	Input       string
-	Output      string
-	IsError     bool
-	DurationMs  int64
-	CreatedAt   int64
+	ID         string
+	SessionID  string
+	MessageID  string
+	ToolCallID string
+	ToolName   string
+	Input      string
+	Output     string
+	IsError    bool
+	DurationMs int64
+	CreatedAt  int64
 }
 
 // Service persists and queries tool invocations.
