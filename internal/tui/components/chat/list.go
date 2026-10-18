@@ -2,15 +2,19 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/lrstanley/bubblezone"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kothagpt/kotha/internal/app"
+	"github.com/kothagpt/kotha/internal/llm/agent"
+	"github.com/kothagpt/kotha/internal/llm/tools"
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/pubsub"
 	"github.com/kothagpt/kotha/internal/session"
@@ -24,6 +28,15 @@ type cacheItem struct {
 	width   int
 	content []uiMessage
 }
+
+// zoneInfo stores a zone ID and its associated data for click handling.
+type zoneInfo struct {
+	zoneID     string
+	toolCallID string
+	shellID    string
+	launchIdx  int
+}
+
 type messagesCmp struct {
 	app           *app.App
 	width, height int
@@ -45,6 +58,11 @@ type messagesCmp struct {
 	workCache     string
 	workCacheKey  string
 	fullContent   string
+
+	// zonePrefix is used for bubblezone clickable elements.
+	zonePrefix string
+	// zoneRegistry stores clickable zone IDs for mouse handling.
+	zoneRegistry []zoneInfo
 }
 type renderFinishedMsg struct{}
 type deferredRenderMsg struct{}
@@ -111,6 +129,18 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport = u
 			cmds = append(cmds, cmd)
 		}
+
+	case tea.MouseMsg:
+		// Handle zone clicks for jump navigation
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if cmd := m.HandleZoneClick(msg); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		// Also forward to viewport for scrolling
+		u, cmd := m.viewport.Update(msg)
+		m.viewport = u
+		cmds = append(cmds, cmd)
 
 	case renderFinishedMsg:
 		m.rendering = false
@@ -220,6 +250,13 @@ func (m *messagesCmp) renderView() {
 	m.workCacheKey = ""
 	m.helpCacheKey = ""
 	m.uiMessages = make([]uiMessage, 0, len(m.messages)*2)
+
+	// Clear tool positions cache for rebuild
+	toolPositions = make(map[string]toolPosition)
+
+	// Clear zone registry for rebuild
+	m.zoneRegistry = make([]zoneInfo, 0)
+
 	pos := 0
 	baseStyle := styles.BaseStyle()
 
@@ -258,17 +295,57 @@ func (m *messagesCmp) renderView() {
 			}
 			isSummary := m.session.SummaryMessageID == msg.ID
 
-			assistantMessages := renderAssistantMessage(
-				msg,
-				inx,
-				m.messages,
-				m.toolIndex,
-				m.app.Messages,
-				m.currentMsgID,
-				isSummary,
-				m.width,
-				pos,
-			)
+assistantMessages := renderAssistantMessage(
+			msg,
+			inx,
+			m.messages,
+			m.toolIndex,
+			m.app.Messages,
+			m.currentMsgID,
+			isSummary,
+			m.width,
+			pos,
+			m.zonePrefix,
+		)
+
+			// Record tool call positions for jumping and build zone registry
+			for toolIdx, tc := range msg.ToolCalls() {
+				if tc.Finished {
+					// Find the corresponding uiMessage for this tool call
+					for _, am := range assistantMessages {
+						if am.messageType == toolMessageType {
+							toolPositions[tc.ID] = toolPosition{
+								toolCallID: tc.ID,
+								position:   am.position,
+								uiMsgIndex: len(m.uiMessages) + toolIdx,
+							}
+							break
+						}
+					}
+
+// Register zone for clickable shell IDs / subagent launches
+				if response, ok := m.toolIndex[tc.ID]; ok {
+					switch tc.Name {
+					case tools.BashToolName:
+						var meta tools.BashResponseMetadata
+						if err := json.Unmarshal([]byte(response.Metadata), &meta); err == nil && meta.ShellID != "" {
+							m.zoneRegistry = append(m.zoneRegistry, zoneInfo{
+								zoneID:     m.zonePrefix + "shell:" + tc.ID + ":" + meta.ShellID,
+								toolCallID: tc.ID,
+								shellID:    meta.ShellID,
+							})
+						}
+					case agent.AgentToolName:
+						// Subagent launch - use toolCall.ID as the session ID
+						m.zoneRegistry = append(m.zoneRegistry, zoneInfo{
+							zoneID:     m.zonePrefix + "subagent:" + tc.ID + ":0",
+							toolCallID: tc.ID, // Using toolCallID to store sessionID
+							launchIdx:  0,
+						})
+					}
+				}
+			}
+
 			for _, msg := range assistantMessages {
 				m.uiMessages = append(m.uiMessages, msg)
 				pos += msg.height + 1 // + 1 for spacing
@@ -278,6 +355,7 @@ func (m *messagesCmp) renderView() {
 				content: assistantMessages,
 			}
 		}
+	}
 	}
 
 	messages := make([]string, 0, len(m.uiMessages)*2)
@@ -493,6 +571,49 @@ func (m *messagesCmp) BindingKeys() []key.Binding {
 	}
 }
 
+// toolPosition stores the mapping from toolCallID to uiMessage position.
+type toolPosition struct {
+	toolCallID string
+	position   int
+	uiMsgIndex int
+}
+
+// toolPositions caches the position of each tool call for fast jumping.
+var toolPositions = make(map[string]toolPosition)
+
+// jumpToToolCallCmd returns a command that scrolls the viewport to the tool call.
+func (m *messagesCmp) jumpToToolCallCmd(toolCallID string) tea.Cmd {
+	if pos, ok := toolPositions[toolCallID]; ok {
+		return func() tea.Msg {
+			m.viewport.SetYOffset(pos.position)
+			return nil
+		}
+	}
+	return nil
+}
+
+// HandleZoneClick processes a zone click event and returns a command if navigation is needed.
+// HandleZoneClick processes a zone click event by checking all registered zones.
+func (m *messagesCmp) HandleZoneClick(msg tea.MouseMsg) tea.Cmd {
+	for _, zi := range m.zoneRegistry {
+		if z := zone.Get(zi.zoneID); z != nil && z.InBounds(msg) {
+			switch {
+			case len(zi.zoneID) > len(m.zonePrefix)+6 && zi.zoneID[len(m.zonePrefix):len(m.zonePrefix)+6] == "shell:":
+				return tea.Sequence(
+					m.jumpToToolCallCmd(zi.toolCallID),
+					util.ReportInfo(fmt.Sprintf("Jumped to background shell %s", zi.shellID)),
+				)
+			case len(zi.zoneID) > len(m.zonePrefix)+9 && zi.zoneID[len(m.zonePrefix):len(m.zonePrefix)+9] == "subagent:":
+				return util.CmdHandler(SelectLaunchMsg{
+					SessionID: zi.toolCallID, // toolCallID stores sessionID for subagent
+					LaunchIdx: zi.launchIdx,
+				})
+			}
+		}
+	}
+	return nil
+}
+
 func NewMessagesCmp(app *app.App) tea.Model {
 	s := spinner.New()
 	s.Spinner = spinner.Pulse
@@ -508,5 +629,6 @@ func NewMessagesCmp(app *app.App) tea.Model {
 		viewport:      vp,
 		spinner:       s,
 		attachments:   attachmets,
+		zonePrefix:    zone.NewPrefix(),
 	}
 }
