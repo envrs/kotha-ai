@@ -87,15 +87,15 @@ func TestMarshallRoundtrip(t *testing.T) {
 	}
 	data, err := marshallParts(parts)
 	require.NoError(t, err)
-	back, err := unmarshallParts(data)
+	back, err := UnmarshallParts(data)
 	require.NoError(t, err)
 	require.Len(t, back, len(parts))
 
 	_, err = marshallParts([]ContentPart{badPart{}})
 	require.Error(t, err)
-	_, err = unmarshallParts([]byte("not json"))
+	_, err = UnmarshallParts([]byte("not json"))
 	require.Error(t, err)
-	_, err = unmarshallParts([]byte(`[{"type":"nope","data":{}}]`))
+	_, err = UnmarshallParts([]byte(`[{"type":"nope","data":{}}]`))
 	require.Error(t, err)
 }
 

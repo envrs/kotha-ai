@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -203,7 +204,23 @@ func (s *Server) handleSearchSessions(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, sessions)
 }
 
-// handleDiffSessions serves GET /v1/sessions/diff?path=&old=&new=.
+// handleRecall serves GET /v1/recall?session_id=&limit=.
+func (s *Server) handleRecall(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 5
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	result, err := s.app.History.RecallContext(r.Context(), q.Get("session_id"), limit)
+	if err != nil {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	s.writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) handleDiffSessions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	path := q.Get("path")

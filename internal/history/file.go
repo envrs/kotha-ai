@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kothagpt/kotha/internal/db"
 	"github.com/kothagpt/kotha/internal/diff"
+	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/pubsub"
 )
 
@@ -40,6 +41,7 @@ type Service interface {
 	Delete(ctx context.Context, id string) error
 	DeleteSessionFiles(ctx context.Context, sessionID string) error
 	DiffSessions(ctx context.Context, path, oldSessionID, newSessionID string) (FileDiff, error)
+	RecallContext(ctx context.Context, sessionID string, limit int) (RecallContext, error)
 }
 
 // FileDiff holds a unified diff between two session versions of a file.
@@ -249,6 +251,76 @@ func (s *service) DeleteSessionFiles(ctx context.Context, sessionID string) erro
 		}
 	}
 	return nil
+}
+
+func (s *service) RecallContext(ctx context.Context, sessionID string, limit int) (RecallContext, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	sessions, err := s.q.ListSessions(ctx)
+	if err != nil {
+		return RecallContext{}, err
+	}
+	recent := make([]db.Session, 0, limit)
+	for _, sess := range sessions {
+		if sess.ParentSessionID.Valid {
+			continue
+		}
+		if sessionID != "" && sess.ID == sessionID {
+			continue
+		}
+		recent = append(recent, sess)
+		if len(recent) >= limit {
+			break
+		}
+	}
+
+	summaries := make([]db.Session, 0, len(recent))
+	for _, sess := range recent {
+		if !sess.SummaryMessageID.Valid {
+			continue
+		}
+		msg, err := s.q.GetMessage(ctx, sess.SummaryMessageID.String)
+		if err != nil {
+			continue
+		}
+		parts, err := message.UnmarshallParts([]byte(msg.Parts))
+		if err != nil {
+			continue
+		}
+		for _, part := range parts {
+			if text, ok := part.(message.TextContent); ok && strings.TrimSpace(text.Text) != "" {
+				summaries = append(summaries, sess)
+				break
+			}
+		}
+	}
+
+	files, err := s.q.ListLatestSessionFiles(ctx, sessionID)
+	if err != nil {
+		return RecallContext{}, err
+	}
+	result := make([]File, len(files))
+	for i, f := range files {
+		result[i] = File{
+			ID:        f.ID,
+			SessionID: f.SessionID,
+			Path:      f.Path,
+			Content:   f.Content,
+			Version:   f.Version,
+			CreatedAt: f.CreatedAt,
+			UpdatedAt: f.UpdatedAt,
+		}
+	}
+	return RecallContext{
+		Summaries: summaries,
+		Files:     result,
+	}, nil
+}
+
+type RecallContext struct {
+	Summaries []db.Session `json:"summaries"`
+	Files     []File       `json:"files"`
 }
 
 // DiffSessions generates a unified diff for a file between two sessions,

@@ -55,7 +55,7 @@
 ### History & Recall
 - [x] Search past sessions (semantic or keyword)
 - [ ] Recall context from previous runs
-- [ ] Diff view for changes across sessions
+- [x] Diff view for changes across sessions
 
 ## Phase 4: Terminal UI (Week 6)
 

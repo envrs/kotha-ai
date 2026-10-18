@@ -85,6 +85,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	mux.HandleFunc("DELETE /v1/sessions/{session_id}", srv.handleDeleteSession)
 	mux.HandleFunc("GET /v1/sessions/search", srv.handleSearchSessions)
 	mux.HandleFunc("GET /v1/sessions/diff", srv.handleDiffSessions)
+	mux.HandleFunc("GET /v1/recall", srv.handleRecall)
 	mux.HandleFunc("GET /v1/sessions/{session_id}/messages", srv.handleListMessages)
 	mux.HandleFunc("GET /v1/sessions/{session_id}/tool_calls", srv.handleListToolCalls)
 	mux.HandleFunc("GET /v1/sessions/{session_id}/export", srv.handleExportSession)

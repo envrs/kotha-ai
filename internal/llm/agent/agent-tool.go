@@ -116,6 +116,6 @@ func NewAgentTool(
 		toolcalls:      Toolcalls,
 		lspClients:     LspClients,
 		configProvider: configProvider,
-		logger:        logger,
+		logger:         logger,
 	}
 }
