@@ -41,6 +41,15 @@ type App struct {
 	// are admitted to the agent. Public so callers can register hooks.
 	PromptChain *plugin.Chain
 
+	// HookRegistry manages session-scoped and global prompt hooks.
+	HookRegistry *plugin.HookRegistry
+
+	// AdmissionStore tracks admitted prompt IDs for idempotency.
+	AdmissionStore *plugin.AdmissionStore
+
+	// PromptPipeline handles staged prompt preparation.
+	PromptPipeline *plugin.PreparationPipeline
+
 	Meter *observability.Meter
 
 	LSPClients map[string]*lsp.Client
@@ -62,6 +71,10 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 	toolcalls := toolcall.NewService(q)
 	symbols := symbol.NewService(q)
 
+	hookRegistry := plugin.NewHookRegistry()
+	admissionStore := plugin.NewAdmissionStore(24 * time.Hour)
+	promptPipeline := plugin.NewPreparationPipeline(hookRegistry, admissionStore)
+
 	app := &App{
 		Sessions:       sessions,
 		Messages:       messages,
@@ -72,6 +85,9 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		LSPClients:     make(map[string]*lsp.Client),
 		configProvider: provider,
 		PromptChain:    plugin.NewChain(),
+		HookRegistry:   hookRegistry,
+		AdmissionStore: admissionStore,
+		PromptPipeline: promptPipeline,
 		Meter:          observability.NewMeter(),
 	}
 
@@ -103,6 +119,7 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		provider,
 		logging.GetDefaultLogger(),
 		agent.WithPromptChain(app.PromptChain),
+		agent.WithPromptPipeline(app.PromptPipeline),
 	)
 	if err != nil {
 		logging.Error("Failed to create coder agent", err)

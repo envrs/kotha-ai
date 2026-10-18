@@ -11,7 +11,7 @@ import (
 func TestPromptChainAdmits(t *testing.T) {
 	chain := plugin.NewChain()
 	var seen string
-	chain.Use(plugin.Func("record", func(ctx context.Context, req *plugin.PromptRequest) error {
+	chain.Use(plugin.LegacyFunc("record", func(ctx context.Context, req *plugin.PromptRequest) error {
 		seen = req.Content
 		req.Content = req.Content + " [seen]"
 		return nil
@@ -29,7 +29,7 @@ func TestPromptChainAdmits(t *testing.T) {
 
 func TestPromptChainBlocks(t *testing.T) {
 	chain := plugin.NewChain()
-	chain.Use(plugin.Func("blocker", func(ctx context.Context, req *plugin.PromptRequest) error {
+	chain.Use(plugin.LegacyFunc("blocker", func(ctx context.Context, req *plugin.PromptRequest) error {
 		return plugin.Block("blocker", "not allowed")
 	}))
 	ag := &agent{promptChain: chain}

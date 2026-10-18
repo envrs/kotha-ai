@@ -87,6 +87,10 @@ type agent struct {
 	// promptChain intercepts user prompts before admission (persistence
 	// and LLM dispatch). Nil-safe: no interceptors when nil.
 	promptChain *plugin.Chain
+
+	// promptPipeline handles staged prompt preparation with idempotency,
+	// interruptibility, and revert-on-failure.
+	promptPipeline *plugin.PreparationPipeline
 }
 
 // AgentOption customizes an agent at construction.
@@ -97,6 +101,12 @@ type AgentOption func(*agent)
 // rejection produces an error event instead of starting a run.
 func WithPromptChain(chain *plugin.Chain) AgentOption {
 	return func(a *agent) { a.promptChain = chain }
+}
+
+// WithPromptPipeline installs a preparation pipeline for staged prompt
+// preparation with idempotency, hooks, and revert-on-failure.
+func WithPromptPipeline(pipeline *plugin.PreparationPipeline) AgentOption {
+	return func(a *agent) { a.promptPipeline = pipeline }
 }
 
 func NewAgent(
@@ -301,23 +311,84 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 // user prompt. Interceptors may rewrite the content or attachments; a
 // rejection (including an empty rewrite) is returned as an error.
 func (a *agent) admitPrompt(ctx context.Context, sessionID, content string, attachments []message.Attachment) (string, []message.Attachment, error) {
-	if a.promptChain == nil || a.promptChain.Len() == 0 {
+	// Legacy chain support
+	if a.promptChain != nil && a.promptChain.Len() > 0 {
+		req := &plugin.PromptRequest{
+			SessionID:   sessionID,
+			Content:     content,
+			Attachments: attachments,
+		}
+		if err := a.promptChain.Intercept(ctx, req); err != nil {
+			return "", nil, err
+		}
+		if strings.TrimSpace(req.Content) == "" {
+			return "", nil, &plugin.BlockedError{Interceptor: "agent", Reason: "prompt is empty after interceptors"}
+		}
+		return req.Content, req.Attachments, nil
+	}
+
+	// New preparation pipeline
+	if a.promptPipeline != nil {
+		// Build rich PromptRequest from legacy params
+		req := &plugin.PromptRequest{
+			SessionID:   sessionID,
+			Text:        content,
+			Delivery:    plugin.DeliveryDirect,
+			AdmissionID: generateAdmissionID(sessionID, content),
+		}
+		for _, att := range attachments {
+			req.Files = append(req.Files, plugin.FileDraft{
+				ID:       generateFileDraftID(),
+				Path:     att.FilePath,
+				Name:     att.FileName,
+				Size:     int64(len(att.Content)),
+				MIMEType: att.MimeType,
+				Content:  att.Content,
+				Prepared: true,
+			})
+		}
+
+		if err := a.promptPipeline.Prepare(ctx, req); err != nil {
+			return "", nil, err
+		}
+		if req.AlreadyAdmitted {
+			return "", nil, &plugin.BlockedError{Interceptor: "idempotency", Reason: "prompt already admitted"}
+		}
+		if req.Prepared {
+			// Convert back to legacy format for processGeneration
+			content = req.Text
+			attachments = make([]message.Attachment, len(req.Files))
+			for i, f := range req.Files {
+				attachments[i] = message.Attachment{
+					FilePath: f.Path,
+					FileName: f.Name,
+					MimeType: f.MIMEType,
+					Content:  f.Content,
+				}
+			}
+		}
 		return content, attachments, nil
 	}
 
-	req := &plugin.PromptRequest{
-		SessionID:   sessionID,
-		Content:     content,
-		Attachments: attachments,
-	}
-	if err := a.promptChain.Intercept(ctx, req); err != nil {
-		return "", nil, err
-	}
+	return content, attachments, nil
+}
 
-	if strings.TrimSpace(req.Content) == "" {
-		return "", nil, &plugin.BlockedError{Interceptor: "agent", Reason: "prompt is empty after interceptors"}
+// generateAdmissionID creates a deterministic ID for idempotency.
+func generateAdmissionID(sessionID, content string) string {
+	// Simple hash-based ID; in production could use crypto
+	h := 0
+	for _, c := range sessionID + "|" + content {
+		h = h*31 + int(c)
 	}
-	return req.Content, req.Attachments, nil
+	if h < 0 {
+		h = -h
+	}
+	return fmt.Sprintf("adm-%x", h)
+}
+
+// generateFileDraftID creates a unique draft ID.
+func generateFileDraftID() string {
+	return fmt.Sprintf("fd-%x", time.Now().UnixNano())
 }
 
 func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
