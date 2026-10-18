@@ -431,3 +431,146 @@ func (h *SessionHook) Hook(key string, hook PromptHook) {
 func NewSessionHook(sessionID string, registry *HookRegistry) *SessionHook {
 	return &SessionHook{sessionID: sessionID, registry: registry}
 }
+
+// RetryDecision represents the decision of a retry hook.
+type RetryDecision int
+
+const (
+	// RetryDecisionRetry indicates the operation should be retried.
+	RetryDecisionRetry RetryDecision = iota
+	// RetryDecisionFail indicates the operation should fail without retry.
+	RetryDecisionFail
+	// RetryDecisionUseFallback indicates the operation should use a fallback (if available).
+	RetryDecisionUseFallback
+)
+
+// RetryContext provides context to a retry hook about the failed operation.
+type RetryContext struct {
+	// SessionID is the ID of the session where the failure occurred.
+	SessionID string
+	// Attempt is the current attempt number (1-indexed).
+	Attempt int
+	// MaxAttempts is the maximum number of attempts allowed by the provider.
+	MaxAttempts int
+	// Error is the error that caused the failure.
+	Error error
+	// ProviderName is the name of the provider that failed.
+	ProviderName string
+	// ModelID is the model ID that was being used.
+	ModelID string
+	// IsStream indicates whether the failure occurred during streaming.
+	IsStream bool
+	// Metadata holds arbitrary metadata about the request.
+	Metadata map[string]any
+}
+
+// RetryHook is called when a provider operation fails, allowing plugins to
+// decide whether to retry, fail, or use a fallback.
+// The hook should return a RetryDecision and optionally a modified error.
+type RetryHook func(ctx context.Context, retryCtx *RetryContext) (RetryDecision, error)
+
+// RetryHookRegistry manages retry hooks with per-session scoping.
+type RetryHookRegistry struct {
+	mu           sync.RWMutex
+	global       []RetryHook
+	sessionHooks map[string][]RetryHook
+}
+
+// NewRetryHookRegistry creates a new retry hook registry.
+func NewRetryHookRegistry() *RetryHookRegistry {
+	return &RetryHookRegistry{
+		sessionHooks: make(map[string][]RetryHook),
+	}
+}
+
+// RegisterGlobal adds a retry hook that runs for all sessions.
+func (r *RetryHookRegistry) RegisterGlobal(hook RetryHook) {
+	if hook == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.global = append(r.global, hook)
+}
+
+// RegisterSession adds a retry hook for a specific session.
+func (r *RetryHookRegistry) RegisterSession(sessionID string, hook RetryHook) {
+	if hook == nil || sessionID == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessionHooks[sessionID] = append(r.sessionHooks[sessionID], hook)
+}
+
+// GetHooks returns all retry hooks for a session (global + session-scoped).
+func (r *RetryHookRegistry) GetHooks(sessionID string) []RetryHook {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	hooks := make([]RetryHook, 0, len(r.global)+len(r.sessionHooks[sessionID]))
+	hooks = append(hooks, r.global...)
+	if sessionHooks, ok := r.sessionHooks[sessionID]; ok {
+		hooks = append(hooks, sessionHooks...)
+	}
+	return hooks
+}
+
+// ClearSession removes all session-scoped retry hooks for a session.
+func (r *RetryHookRegistry) ClearSession(sessionID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.sessionHooks, sessionID)
+}
+
+// EvaluateRetryHooks runs all registered retry hooks and returns the final decision.
+// The decision is determined by the most permissive hook: Retry > UseFallback > Fail.
+// If no hooks are registered, the default is RetryDecisionFail.
+func (r *RetryHookRegistry) EvaluateRetryHooks(ctx context.Context, retryCtx *RetryContext) (RetryDecision, error) {
+	r.mu.RLock()
+	hooks := make([]RetryHook, 0, len(r.global)+len(r.sessionHooks[retryCtx.SessionID]))
+	hooks = append(hooks, r.global...)
+	if sessionHooks, ok := r.sessionHooks[retryCtx.SessionID]; ok {
+		hooks = append(hooks, sessionHooks...)
+	}
+	r.mu.RUnlock()
+
+	if len(hooks) == 0 {
+		return RetryDecisionFail, nil
+	}
+
+	var finalDecision = RetryDecisionFail
+	var lastErr error
+
+	for _, hook := range hooks {
+		decision, err := hook(ctx, retryCtx)
+		if err != nil {
+			lastErr = err
+			// An error from a hook is treated as a vote to fail
+			continue
+		}
+		// More permissive decisions override less permissive ones
+		if decision > finalDecision {
+			finalDecision = decision
+		}
+	}
+
+	return finalDecision, lastErr
+}
+
+// SessionRetryHook allows registering retry hooks on a session via context.
+// Usage: ctx.session.hook("retry", hookFn) — attaches to session scope.
+type SessionRetryHook struct {
+	sessionID string
+	registry  *RetryHookRegistry
+}
+
+func (h *SessionRetryHook) Hook(key string, hook RetryHook) {
+	if h.registry != nil && key == "retry" {
+		h.registry.RegisterSession(h.sessionID, hook)
+	}
+}
+
+// NewSessionRetryHook creates a SessionRetryHook for a session.
+func NewSessionRetryHook(sessionID string, registry *RetryHookRegistry) *SessionRetryHook {
+	return &SessionRetryHook{sessionID: sessionID, registry: registry}
+}

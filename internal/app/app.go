@@ -50,6 +50,9 @@ type App struct {
 	// PromptPipeline handles staged prompt preparation.
 	PromptPipeline *plugin.PreparationPipeline
 
+	// RetryHookRegistry holds retry hooks for provider failure handling.
+	RetryHookRegistry *plugin.RetryHookRegistry
+
 	Meter *observability.Meter
 
 	LSPClients map[string]*lsp.Client
@@ -73,22 +76,24 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 
 	hookRegistry := plugin.NewHookRegistry()
 	admissionStore := plugin.NewAdmissionStore(24 * time.Hour)
+	retryHookRegistry := plugin.NewRetryHookRegistry()
 	promptPipeline := plugin.NewPreparationPipeline(hookRegistry, admissionStore)
 
 	app := &App{
-		Sessions:       sessions,
-		Messages:       messages,
-		History:        files,
-		ToolCalls:      toolcalls,
-		Symbols:        symbols,
-		Permissions:    permission.NewPermissionService(),
-		LSPClients:     make(map[string]*lsp.Client),
-		configProvider: provider,
-		PromptChain:    plugin.NewChain(),
-		HookRegistry:   hookRegistry,
-		AdmissionStore: admissionStore,
-		PromptPipeline: promptPipeline,
-		Meter:          observability.NewMeter(),
+		Sessions:          sessions,
+		Messages:          messages,
+		History:           files,
+		ToolCalls:         toolcalls,
+		Symbols:           symbols,
+		Permissions:       permission.NewPermissionService(),
+		LSPClients:        make(map[string]*lsp.Client),
+		configProvider:    provider,
+		PromptChain:       plugin.NewChain(),
+		HookRegistry:      hookRegistry,
+		AdmissionStore:    admissionStore,
+		RetryHookRegistry: retryHookRegistry,
+		PromptPipeline:    promptPipeline,
+		Meter:             observability.NewMeter(),
 	}
 
 	// Load custom YAML themes before theme init
@@ -120,6 +125,7 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		logging.GetDefaultLogger(),
 		agent.WithPromptChain(app.PromptChain),
 		agent.WithPromptPipeline(app.PromptPipeline),
+		agent.WithRetryHookRegistry(app.RetryHookRegistry),
 	)
 	if err != nil {
 		logging.Error("Failed to create coder agent", err)

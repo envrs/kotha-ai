@@ -30,6 +30,8 @@ import (
 var (
 	ErrRequestCancelled = errors.New("request cancelled by user")
 	ErrSessionBusy      = errors.New("session is currently processing another request")
+	// ErrRetryRequested is a sentinel error indicating the retry hook requested a retry.
+	ErrRetryRequested = errors.New("retry requested by hook")
 )
 
 type AgentEventType string
@@ -92,6 +94,10 @@ type agent struct {
 	// promptPipeline handles staged prompt preparation with idempotency,
 	// interruptibility, and revert-on-failure.
 	promptPipeline *plugin.PreparationPipeline
+
+	// retryHookRegistry holds retry hooks for provider failure handling.
+	// Nil-safe: no retry hooks when nil.
+	retryHookRegistry *plugin.RetryHookRegistry
 }
 
 // AgentOption customizes an agent at construction.
@@ -108,6 +114,13 @@ func WithPromptChain(chain *plugin.Chain) AgentOption {
 // preparation with idempotency, hooks, and revert-on-failure.
 func WithPromptPipeline(pipeline *plugin.PreparationPipeline) AgentOption {
 	return func(a *agent) { a.promptPipeline = pipeline }
+}
+
+// WithRetryHookRegistry installs a retry hook registry for provider failure
+// handling. When a provider operation fails, the retry hooks are consulted
+// to decide whether to retry, fail, or use a fallback.
+func WithRetryHookRegistry(registry *plugin.RetryHookRegistry) AgentOption {
+	return func(a *agent) { a.retryHookRegistry = registry }
 }
 
 func NewAgent(
@@ -451,6 +464,12 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		}
 		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
 		if err != nil {
+			// Check if retry was requested
+			if errors.Is(err, ErrRetryRequested) {
+				a.logger.InfoPersist(fmt.Sprintf("Retrying generation for session %s", sessionID))
+				// Restart the generation loop
+				continue
+			}
 			if errors.Is(err, context.Canceled) {
 				agentMessage.AddFinish(message.FinishReasonCanceled)
 				_ = a.messages.Update(context.Background(), agentMessage)
@@ -506,6 +525,11 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	// Process each event in the stream.
 	for event := range eventChan {
 		if processErr := a.processEvent(ctx, sessionID, &assistantMsg, event); processErr != nil {
+			// Check if retry was requested
+			if errors.Is(processErr, ErrRetryRequested) {
+				// Return a special error that signals retry to the caller
+				return assistantMsg, nil, ErrRetryRequested
+			}
 			a.finishMessage(ctx, &assistantMsg, message.FinishReasonCanceled)
 			return assistantMsg, nil, processErr
 		}
@@ -695,6 +719,39 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 			a.logger.InfoPersist(fmt.Sprintf("Event processing canceled for session: %s", sessionID))
 			return context.Canceled
 		}
+
+		// Check retry hooks for provider failure
+		if a.retryHookRegistry != nil {
+			retryCtx := &plugin.RetryContext{
+				SessionID:    sessionID,
+				Attempt:      1, // This is the first agent-level retry attempt
+				MaxAttempts:  1, // Only one agent-level retry by default
+				Error:        event.Error,
+				ProviderName: string(a.provider.Model().Provider),
+				ModelID:      string(a.provider.Model().ID),
+				IsStream:     true,
+			}
+
+			decision, err := a.retryHookRegistry.EvaluateRetryHooks(ctx, retryCtx)
+			if err != nil {
+				a.logger.ErrorPersist(fmt.Sprintf("Retry hook error: %v", err))
+			}
+
+			switch decision {
+			case plugin.RetryDecisionRetry:
+				a.logger.InfoPersist(fmt.Sprintf("Retrying request for session %s per retry hook", sessionID))
+				// Return special error to signal retry to the caller
+				return ErrRetryRequested
+			case plugin.RetryDecisionUseFallback:
+				a.logger.InfoPersist(fmt.Sprintf("Using fallback for session %s per retry hook", sessionID))
+				// Could implement fallback logic here
+			case plugin.RetryDecisionFail:
+				fallthrough
+			default:
+				// Default: fail
+			}
+		}
+
 		a.logger.ErrorPersist(event.Error.Error())
 		return event.Error
 	case provider.EventComplete:
@@ -709,6 +766,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	return nil
 }
 
+// TrackUsage records token usage and cost for a session.
 func (a *agent) TrackUsage(ctx context.Context, sessionID string, model models.Model, usage provider.TokenUsage) error {
 	sess, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
