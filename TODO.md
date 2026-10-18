@@ -116,9 +116,9 @@
 ## Phase 8: Deployment & Documentation (Week 11)
 
 ### Release Pipeline
-- [ ] Goreleaser config for multi-platform binaries (Linux, macOS, Windows)
-- [ ] Homebrew formula, AUR package
-- [ ] Docker image
+- [x] Goreleaser config for multi-platform binaries (Linux, macOS, Windows)
+- [x] Homebrew formula, AUR package
+- [x] Docker image
 
 ### Documentation
 - [ ] README with quick start

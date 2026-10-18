@@ -1,0 +1,13 @@
+.git
+.github
+.kotha
+.tmp
+bin
+dist
+coverage.out
+*.db
+*.db-shm
+*.db-wal
+Dockerfile
+.dockerignore
+.docker*
