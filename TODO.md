@@ -80,9 +80,9 @@
 ## Phase 5: HTTP Server & API (Week 7)
 
 ### OpenAPI-Driven API
-- [ ] Routes: `/sessions`, `/ask`, `/stop`, `/history`
+- [x] Routes: `/sessions`, `/ask`, `/stop`, `/history`
 - [x] Middleware: auth (GitHub OAuth or API key), logging, rate limiting
-- [ ] WebSocket support for streaming responses (optional)
+- [x] WebSocket support for streaming responses (optional)
 
 ### Client CLI
 - [ ] `kotha api ask` — send prompt to server
