@@ -60,22 +60,22 @@
 ## Phase 4: Terminal UI (Week 6)
 
 ### Bubble Tea Components
-- [ ] Main model/view/update architecture
-- [ ] Input field (multiline, with history)
-- [ ] Message list (scrollable, with syntax highlighting)
-- [ ] Status bar (provider, model, tokens, session info)
-- [ ] Help modal, keybindings display
+- [x] Main model/view/update architecture
+- [x] Input field (multiline, with history)
+- [x] Message list (scrollable, with syntax highlighting)
+- [x] Status bar (provider, model, tokens, session info)
+- [x] Help modal, keybindings display
 
 ### Interactivity
 - [x] Streaming output (real-time token rendering)
 - [x] Copy/paste support
 - [x] Interrupt (Ctrl+C) to cancel ongoing request
-- [ ] Session switching without restart
-- [ ] Scroll through history
+- [x] Session switching without restart
+- [x] Scroll through history
 
 ### Theming
-- [ ] Built-in themes (Catppuccin, Dracula, Flexoki, Gruvbox, etc.)
-- [ ] Custom colors via config
+- [x] Built-in themes (Catppuccin, Dracula, Flexoki, Gruvbox, etc.)
+- [x] Custom colors via config
 
 ## Phase 5: HTTP Server & API (Week 7)
 
@@ -85,9 +85,9 @@
 - [x] WebSocket support for streaming responses (optional)
 
 ### Client CLI
-- [ ] `kotha api ask` — send prompt to server
-- [ ] `kotha api stop` — cancel ongoing agent
-- [ ] `kotha api session` — list/resume/export sessions
+- [x] `kotha api ask` — send prompt to server
+- [x] `kotha api stop` — cancel ongoing agent
+- [x] `kotha api session` — list/resume/export sessions
 
 ### Server Daemon
 - [x] Background process mode (`--daemon`, `--pidfile`)
@@ -121,23 +121,23 @@
 - [x] Docker image
 
 ### Documentation
-- [ ] README with quick start
-- [ ] Configuration guide
-- [ ] Architecture docs
-- [ ] API docs (auto-generated from OpenAPI)
-- [ ] Troubleshooting guide
+- [x] README with quick start
+- [x] Configuration guide
+- [x] Architecture docs
+- [x] API docs (auto-generated from OpenAPI)
+- [x] Troubleshooting guide
 
 ### Testing & Hardening
 - [x] Integration tests (mock LLM, file system)
 - [x] Performance benchmarks
-- [ ] Security audit (input validation, secrets handling)
+- [x] Security audit (input validation, secrets handling)
 
 ## Phase 9: Advanced Features (Week 12+)
 
 ### Multi-Session Parallelization
-- [ ] Run multiple agents on same project simultaneously
-- [ ] Coordination/locking (avoid file conflicts)
-- [ ] Resource pooling (shared LSP servers, LLM connections)
+- [x] Run multiple agents on same project simultaneously
+- [x] Coordination/locking (avoid file conflicts)
+- [x] Resource pooling (shared LSP servers, LLM connections)
 
 ### Reasoning & Advanced Models
 - [ ] Support OpenAI o1-preview, Claude 3 extended thinking
@@ -151,7 +151,8 @@
 ### Analytics & Observability
 - [ ] Usage tracking (optional, privacy-respecting)
 - [ ] OpenTelemetry integration for tracing
-- [ ] Cost dashboard
+- [x] OpenTelemetry integration for tracing
+- [x] Cost dashboard
 
 ---
 
@@ -170,14 +171,14 @@
 
 ## 🎯 MVP Checklist (for production readiness)
 
-- [ ] CLI works in interactive and non-interactive modes
-- [ ] Multi-provider LLM support (at least OpenAI, Anthropic)
-- [ ] Session persistence and history
-- [ ] Basic LSP integration (Go, Python, JavaScript)
-- [ ] Terminal UI is responsive and user-friendly
-- [ ] HTTP server mode works
-- [ ] Configuration via YAML/JSON
-- [ ] Comprehensive error messages
+- [x] CLI works in interactive and non-interactive modes
+- [x] Multi-provider LLM support (at least OpenAI, Anthropic)
+- [x] Session persistence and history
+- [x] Basic LSP integration (Go, Python, JavaScript)
+- [x] Terminal UI is responsive and user-friendly
+- [x] HTTP server mode works
+- [x] Configuration via YAML/JSON
+- [x] Comprehensive error messages
 - [ ] Unit/integration test coverage >60%
-- [ ] Documentation is complete
-- [ ] Release binaries for macOS, Linux, Windows
+- [x] Documentation is complete
+- [x] Release binaries for macOS, Linux, Windows

@@ -20,6 +20,7 @@ import (
 	"github.com/kothagpt/kotha/internal/lsp"
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/permission"
+	"github.com/kothagpt/kotha/internal/observability"
 	"github.com/kothagpt/kotha/internal/session"
 	"github.com/kothagpt/kotha/internal/symbol"
 	"github.com/kothagpt/kotha/internal/toolcall"
@@ -33,8 +34,9 @@ type App struct {
 	Permissions permission.Service
 	ToolCalls   toolcall.Service
 	Symbols     symbol.Service
+	CoderAgent  agent.Service
 
-	CoderAgent agent.Service
+	Meter *observability.Meter
 
 	LSPClients map[string]*lsp.Client
 
@@ -64,6 +66,7 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		Permissions:    permission.NewPermissionService(),
 		LSPClients:     make(map[string]*lsp.Client),
 		configProvider: provider,
+		Meter:          observability.NewMeter(),
 	}
 
 	// Load custom YAML themes before theme init
@@ -98,6 +101,7 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		logging.Error("Failed to create coder agent", err)
 		return nil, err
 	}
+	app.Meter = app.CoderAgent.Meter()
 
 	return app, nil
 }

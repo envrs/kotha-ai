@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/kothagpt/kotha/internal/llm/provider"
 	"github.com/kothagpt/kotha/internal/llm/tools"
 	"github.com/kothagpt/kotha/internal/logging"
+	"github.com/kothagpt/kotha/internal/observability"
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/permission"
 	"github.com/kothagpt/kotha/internal/pubsub"
@@ -56,6 +58,7 @@ type Service interface {
 	IsBusy() bool
 	Update(agentName config.AgentName, modelID models.ModelID) (models.Model, error)
 	Summarize(ctx context.Context, sessionID string) error
+	Meter() *observability.Meter
 }
 
 type agent struct {
@@ -74,6 +77,11 @@ type agent struct {
 
 	configProvider config.ConfigProvider
 	logger         logging.Logger
+	meter          *observability.Meter
+
+	// fileLock coordinates edits to the same file across concurrent
+	// agent sessions. Nil when coordination is disabled.
+	fileLock *FileLock
 }
 
 func NewAgent(
@@ -117,6 +125,8 @@ func NewAgent(
 		activeRequests:    sync.Map{},
 		configProvider:    configProvider,
 		logger:            logger,
+		meter:             observability.NewMeter(),
+		fileLock:          NewFileLock(30 * time.Second),
 	}
 
 	return agent, nil
@@ -127,7 +137,6 @@ func (a *agent) Model() models.Model {
 }
 
 func (a *agent) Cancel(sessionID string) {
-	// Cancel regular requests
 	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID); exists {
 		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
 			a.logger.InfoPersist(fmt.Sprintf("Request cancellation initiated for session: %s", sessionID))
@@ -234,6 +243,9 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 			}
 		}()
 		a.logger.Debug("Request started", "sessionID", sessionID)
+		if a.meter != nil {
+			a.meter.AgentRuns.Add(1)
+		}
 		var attachmentParts []message.ContentPart
 		for _, attachment := range attachments {
 			attachmentParts = append(attachmentParts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: attachment.Content})
@@ -241,6 +253,9 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		result := a.processGeneration(genCtx, sessionID, content, attachmentParts)
 		if result.Error != nil && !errors.Is(result.Error, ErrRequestCancelled) && !errors.Is(result.Error, context.Canceled) {
 			a.logger.ErrorPersist(result.Error.Error())
+		}
+		if a.meter != nil {
+			a.meter.Report()
 		}
 		a.logger.Debug("Request completed", "sessionID", sessionID)
 		a.Publish(pubsub.CreatedEvent, result)
@@ -412,12 +427,29 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				}
 				continue
 			}
+			// Coordinate edits to the same file across concurrent agent
+			// sessions. Write/edit tools expose a file path; non-file tools
+			// are unaffected.
+			filePath := extractFilePath(toolCall.Input)
+			if filePath != "" && a.fileLock != nil {
+				if lockErr := a.fileLock.Acquire(ctx, sessionID, filePath); lockErr != nil {
+					toolResults[i] = message.ToolResult{
+						ToolCallID: toolCall.ID,
+						Content:    lockErr.Error(),
+						IsError:    true,
+					}
+					continue
+				}
+			}
 			start := time.Now()
 			toolResult, toolErr := tool.Run(ctx, tools.ToolCall{
 				ID:    toolCall.ID,
 				Name:  toolCall.Name,
 				Input: toolCall.Input,
 			})
+			if filePath != "" && a.fileLock != nil {
+				a.fileLock.Release(sessionID, filePath)
+			}
 			// Record the tool invocation for history and cost auditing.
 			a.recordToolCall(ctx, sessionID, assistantMsg.ID, toolCall, toolResult, toolErr, time.Since(start))
 			if toolErr != nil {
@@ -475,6 +507,13 @@ func (a *agent) finishMessage(ctx context.Context, msg *message.Message, finishR
 func (a *agent) recordToolCall(ctx context.Context, sessionID, messageID string, call message.ToolCall, result tools.ToolResponse, runErr error, duration time.Duration) {
 	if a.toolcalls == nil {
 		return
+	}
+	if a.meter != nil {
+		a.meter.ToolCalls.Add(1)
+		if runErr != nil || result.IsError {
+			a.meter.ToolErrors.Add(1)
+		}
+		a.meter.Latency.Record(float64(duration.Milliseconds()))
 	}
 	isError := runErr != nil || result.IsError
 	output := result.Content
@@ -806,4 +845,23 @@ func createAgentProvider(agentName config.AgentName, configProvider config.Confi
 	}
 
 	return agentProvider, nil
+}
+
+func (a *agent) Meter() *observability.Meter {
+	return a.meter
+}
+
+// extractFilePath pulls a file_path field out of a tool call's JSON input.
+// Returns "" for tools that don't operate on files.
+func extractFilePath(input string) string {
+	if input == "" {
+		return ""
+	}
+	var parsed struct {
+		FilePath string `json:"file_path"`
+	}
+	if err := json.Unmarshal([]byte(input), &parsed); err != nil {
+		return ""
+	}
+	return parsed.FilePath
 }

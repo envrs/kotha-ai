@@ -9,6 +9,7 @@ import (
 	"github.com/kothagpt/kotha/internal/llm/agent"
 	"github.com/kothagpt/kotha/internal/llm/models"
 	"github.com/kothagpt/kotha/internal/message"
+	"github.com/kothagpt/kotha/internal/observability"
 	"github.com/kothagpt/kotha/internal/permission"
 	"github.com/kothagpt/kotha/internal/pubsub"
 	"github.com/kothagpt/kotha/internal/session"
@@ -70,6 +71,7 @@ func (f *fakeAgent) Update(_ config.AgentName, _ models.ModelID) (models.Model, 
 	return models.Model{ID: "mock"}, nil
 }
 func (f *fakeAgent) Summarize(_ context.Context, _ string) error { return nil }
+func (f *fakeAgent) Meter() *observability.Meter { return observability.NewMeter() }
 func (f *fakeAgent) Subscribe(_ context.Context) <-chan pubsub.Event[agent.AgentEvent] {
 	ch := make(chan pubsub.Event[agent.AgentEvent])
 	close(ch)

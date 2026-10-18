@@ -31,5 +31,4 @@ var shareCmd = &cobra.Command{
 
 func init() {
 	shareCmd.Flags().StringVar(&apiSession, "session", "", "session ID (required)")
-	Cmd.AddCommand(shareCmd)
 }

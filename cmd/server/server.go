@@ -95,6 +95,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	mux.HandleFunc("GET /v1/sessions/{session_id}/messages", srv.handleListMessages)
 	mux.HandleFunc("GET /v1/sessions/{session_id}/tool_calls", srv.handleListToolCalls)
 	mux.HandleFunc("GET /v1/sessions/{session_id}/export", srv.handleExportSession)
+	mux.HandleFunc("GET /v1/costs", srv.handleCost)
 	mux.HandleFunc("GET /v1/share/{share_id}", srv.handleGetSharedSession)
 	mux.HandleFunc("GET /v1/models", srv.handleCurrentModel)
 	mux.HandleFunc("PUT /v1/models", srv.handleUpdateModel)

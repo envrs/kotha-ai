@@ -12,6 +12,7 @@ import (
 	"github.com/kothagpt/kotha/internal/llm/agent"
 	"github.com/kothagpt/kotha/internal/llm/models"
 	"github.com/kothagpt/kotha/internal/message"
+	"github.com/kothagpt/kotha/internal/observability"
 	"github.com/kothagpt/kotha/internal/permission"
 	"github.com/kothagpt/kotha/internal/pubsub"
 	"github.com/kothagpt/kotha/internal/session"
@@ -37,6 +38,7 @@ func (s *stubAgent) Update(_ config.AgentName, _ models.ModelID) (models.Model, 
 	return models.Model{}, nil
 }
 func (s *stubAgent) Summarize(ctx context.Context, sessionID string) error { return nil }
+func (s *stubAgent) Meter() *observability.Meter                { return observability.NewMeter() }
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
