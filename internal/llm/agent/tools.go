@@ -32,6 +32,8 @@ func CoderAgentTools(
 	return append(
 		[]tools.BaseTool{
 			tools.NewBashTool(permissions),
+			tools.NewReadBashOutputTool(permissions),
+			tools.NewStopBashTool(permissions),
 			tools.NewEditTool(lspClients, permissions, history),
 			tools.NewFetchTool(permissions),
 			tools.NewGlobTool(),
