@@ -90,9 +90,9 @@
 - [ ] `kotha api session` — list/resume/export sessions
 
 ### Server Daemon
-- [ ] Background process mode (`--daemon`, `--pidfile`)
-- [ ] Log file output
-- [ ] Health check endpoint
+- [x] Background process mode (`--daemon`, `--pidfile`)
+- [x] Log file output
+- [x] Health check endpoint
 
 ## Phase 6: Desktop App (Week 8)
 
