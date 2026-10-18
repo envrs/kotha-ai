@@ -176,3 +176,35 @@ func TestDrain(t *testing.T) {
 		t.Fatalf("drain=%v %v", seen, err)
 	}
 }
+
+func TestWithToolsCreatesAgent(t *testing.T) {
+	// Test that WithTools + WithAgentConfig creates an agent with custom tools
+	evs := make(chan agent.AgentEvent, 2)
+	evs <- agent.AgentEvent{Type: agent.AgentEventTypeResponse, Progress: "thinking"}
+	evs <- agent.AgentEvent{Type: agent.AgentEventTypeResponse, Message: message.Message{ID: "m1", Parts: []message.ContentPart{message.TextContent{Text: "done"}}}}
+	close(evs)
+
+	fakeA := &fakeAgent{events: evs}
+
+	// Test WithAgent (pre-configured agent)
+	c1 := NewClient(&fakeSession{}, nil, fakeA, &fakePermission{})
+	res, err := c1.Ask(context.Background(), "s1", "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Message.Content().String() != "done" {
+		t.Fatalf("WithAgent: result=%+v", res)
+	}
+
+	// Test that WithTools without WithAgentConfig fails gracefully
+	c2 := NewClient(&fakeSession{}, nil, nil, &fakePermission{}, WithTools(BashTool))
+	if _, err := c2.Ask(context.Background(), "s1", "hi"); err == nil {
+		t.Fatal("expected ErrNoAgent when WithTools used without WithAgentConfig")
+	}
+
+	// Test mutual exclusion of WithTools and WithAgent
+	c3 := NewClient(&fakeSession{}, nil, fakeA, &fakePermission{}, WithTools(BashTool))
+	if _, err := c3.Ask(context.Background(), "s1", "hi"); err == nil {
+		t.Fatal("expected error when both WithAgent and WithTools provided")
+	}
+}
