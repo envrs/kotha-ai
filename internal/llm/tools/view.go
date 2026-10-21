@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/kothagpt/kotha/internal/config"
+	"github.com/kothagpt/kotha/internal/fileutil"
 	"github.com/kothagpt/kotha/internal/logging"
 	"github.com/kothagpt/kotha/internal/lsp"
 )
@@ -107,8 +108,10 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		return NewTextErrorResponse("file_path is required"), nil
 	}
 
+	// Expand tilde in file path
+	filePath := fileutil.ExpandTilde(params.FilePath)
+
 	// Handle relative paths
-	filePath := params.FilePath
 	if !filepath.IsAbs(filePath) {
 		filePath = filepath.Join(config.WorkingDirectory(), filePath)
 	}

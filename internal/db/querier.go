@@ -12,18 +12,23 @@ type Querier interface {
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	CreateSymbol(ctx context.Context, arg CreateSymbolParams) (Symbol, error)
 	CreateToolCall(ctx context.Context, arg CreateToolCallParams) (ToolCall, error)
 	DeleteFile(ctx context.Context, id string) error
 	DeleteMessage(ctx context.Context, id string) error
 	DeleteSession(ctx context.Context, id string) error
 	DeleteSessionFiles(ctx context.Context, sessionID string) error
 	DeleteSessionMessages(ctx context.Context, sessionID string) error
+	DeleteSessionSymbols(ctx context.Context, sessionID string) error
 	DeleteSessionToolCalls(ctx context.Context, sessionID string) error
+	DeleteSymbol(ctx context.Context, id string) error
+	DeleteFileSymbols(ctx context.Context, filePath string, sessionID string) error
 	DeleteToolCall(ctx context.Context, id string) error
 	GetFile(ctx context.Context, id string) (File, error)
 	GetFileByPathAndSession(ctx context.Context, arg GetFileByPathAndSessionParams) (File, error)
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetSessionByID(ctx context.Context, id string) (Session, error)
+	GetSymbol(ctx context.Context, id string) (Symbol, error)
 	GetToolCall(ctx context.Context, id string) (ToolCall, error)
 	GetToolCallByToolCallID(ctx context.Context, toolCallID string) (ToolCall, error)
 	ListFilesByPath(ctx context.Context, path string) ([]File, error)
@@ -32,9 +37,12 @@ type Querier interface {
 	ListMessagesBySession(ctx context.Context, sessionID string) ([]Message, error)
 	ListNewFiles(ctx context.Context) ([]File, error)
 	ListSessions(ctx context.Context) ([]Session, error)
+	ListSymbolsByFile(ctx context.Context, filePath string, sessionID string) ([]Symbol, error)
+	ListSymbolsBySession(ctx context.Context, sessionID string) ([]Symbol, error)
 	ListToolCallsByMessage(ctx context.Context, messageID string) ([]ToolCall, error)
 	ListToolCallsBySession(ctx context.Context, sessionID string) ([]ToolCall, error)
 	SearchSessions(ctx context.Context, arg SearchSessionsParams) ([]Session, error)
+	SearchSymbols(ctx context.Context, sessionID string, query string) ([]Symbol, error)
 	UpdateFile(ctx context.Context, arg UpdateFileParams) (File, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)

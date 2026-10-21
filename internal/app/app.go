@@ -16,11 +16,14 @@ import (
 	"github.com/kothagpt/kotha/internal/format"
 	"github.com/kothagpt/kotha/internal/history"
 	"github.com/kothagpt/kotha/internal/llm/agent"
+	"github.com/kothagpt/kotha/internal/plugin"
 	"github.com/kothagpt/kotha/internal/logging"
 	"github.com/kothagpt/kotha/internal/lsp"
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/permission"
+	"github.com/kothagpt/kotha/internal/observability"
 	"github.com/kothagpt/kotha/internal/session"
+	"github.com/kothagpt/kotha/internal/symbol"
 	"github.com/kothagpt/kotha/internal/toolcall"
 	"github.com/kothagpt/kotha/internal/tui/theme"
 )
@@ -31,8 +34,26 @@ type App struct {
 	History     history.Service
 	Permissions permission.Service
 	ToolCalls   toolcall.Service
+	Symbols     symbol.Service
+	CoderAgent  agent.Service
 
-	CoderAgent agent.Service
+	// PromptChain holds prompt interceptors that run before user prompts
+	// are admitted to the agent. Public so callers can register hooks.
+	PromptChain *plugin.Chain
+
+	// HookRegistry manages session-scoped and global prompt hooks.
+	HookRegistry *plugin.HookRegistry
+
+	// AdmissionStore tracks admitted prompt IDs for idempotency.
+	AdmissionStore *plugin.AdmissionStore
+
+	// PromptPipeline handles staged prompt preparation.
+	PromptPipeline *plugin.PreparationPipeline
+
+	// RetryHookRegistry holds retry hooks for provider failure handling.
+	RetryHookRegistry *plugin.RetryHookRegistry
+
+	Meter *observability.Meter
 
 	LSPClients map[string]*lsp.Client
 
@@ -51,15 +72,28 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 	messages := message.NewService(q)
 	files := history.NewService(q, conn)
 	toolcalls := toolcall.NewService(q)
+	symbols := symbol.NewService(q)
+
+	hookRegistry := plugin.NewHookRegistry()
+	admissionStore := plugin.NewAdmissionStore(24 * time.Hour)
+	retryHookRegistry := plugin.NewRetryHookRegistry()
+	promptPipeline := plugin.NewPreparationPipeline(hookRegistry, admissionStore)
 
 	app := &App{
-		Sessions:       sessions,
-		Messages:       messages,
-		History:        files,
-		ToolCalls:      toolcalls,
-		Permissions:    permission.NewPermissionService(),
-		LSPClients:     make(map[string]*lsp.Client),
-		configProvider: provider,
+		Sessions:          sessions,
+		Messages:          messages,
+		History:           files,
+		ToolCalls:         toolcalls,
+		Symbols:           symbols,
+		Permissions:       permission.NewPermissionService(),
+		LSPClients:        make(map[string]*lsp.Client),
+		configProvider:    provider,
+		PromptChain:       plugin.NewChain(),
+		HookRegistry:      hookRegistry,
+		AdmissionStore:    admissionStore,
+		RetryHookRegistry: retryHookRegistry,
+		PromptPipeline:    promptPipeline,
+		Meter:             observability.NewMeter(),
 	}
 
 	// Load custom YAML themes before theme init
@@ -89,11 +123,15 @@ func New(ctx context.Context, conn *sql.DB, provider config.ConfigProvider) (*Ap
 		),
 		provider,
 		logging.GetDefaultLogger(),
+		agent.WithPromptChain(app.PromptChain),
+		agent.WithPromptPipeline(app.PromptPipeline),
+		agent.WithRetryHookRegistry(app.RetryHookRegistry),
 	)
 	if err != nil {
 		logging.Error("Failed to create coder agent", err)
 		return nil, err
 	}
+	app.Meter = app.CoderAgent.Meter()
 
 	return app, nil
 }

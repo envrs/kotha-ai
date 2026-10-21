@@ -51,8 +51,12 @@ type Result struct {
 // Ask sends a prompt and blocks until the agent finishes, returning the
 // final assistant message. Progress can be observed via WithEventCallback.
 func (c *Client) Ask(ctx context.Context, sessionID, prompt string, opts ...AskOption) (Result, error) {
-	if c == nil || c.Agent == nil {
+	if c == nil {
 		return Result{}, ErrNoAgent
+	}
+	ag, err := c.getAgent()
+	if err != nil {
+		return Result{}, err
 	}
 	var o AskOptions
 	for _, fn := range opts {
@@ -66,7 +70,7 @@ func (c *Client) Ask(ctx context.Context, sessionID, prompt string, opts ...AskO
 	if o.AutoApprove {
 		c.AutoApproveSession(sessionID)
 	}
-	events, err := c.Agent.Run(ctx, sessionID, prompt, o.Attachments...)
+	events, err := ag.Run(ctx, sessionID, prompt, o.Attachments...)
 	if err != nil {
 		return Result{}, err
 	}
@@ -95,18 +99,26 @@ func (c *Client) Ask(ctx context.Context, sessionID, prompt string, opts ...AskO
 // Stream starts a run and returns the raw event channel for custom
 // consumers. The caller owns draining the channel.
 func (c *Client) Stream(ctx context.Context, sessionID, prompt string, attachments ...message.Attachment) (<-chan agent.AgentEvent, error) {
-	if c == nil || c.Agent == nil {
+	if c == nil {
 		return nil, ErrNoAgent
 	}
-	return c.Agent.Run(ctx, sessionID, prompt, attachments...)
+	ag, err := c.getAgent()
+	if err != nil {
+		return nil, err
+	}
+	return ag.Run(ctx, sessionID, prompt, attachments...)
 }
 
 // AskStream sends a prompt and returns the raw agent event channel,
 // mirroring the HTTP POST /v1/sessions/{session_id}/ask/stream endpoint.
 // The caller owns draining the channel.
 func (c *Client) AskStream(ctx context.Context, sessionID, prompt string, opts ...AskOption) (<-chan agent.AgentEvent, error) {
-	if c == nil || c.Agent == nil {
+	if c == nil {
 		return nil, ErrNoAgent
+	}
+	ag, err := c.getAgent()
+	if err != nil {
+		return nil, err
 	}
 	var o AskOptions
 	for _, fn := range opts {
@@ -115,5 +127,5 @@ func (c *Client) AskStream(ctx context.Context, sessionID, prompt string, opts .
 	if o.AutoApprove {
 		c.AutoApproveSession(sessionID)
 	}
-	return c.Agent.Run(ctx, sessionID, prompt, o.Attachments...)
+	return ag.Run(ctx, sessionID, prompt, o.Attachments...)
 }

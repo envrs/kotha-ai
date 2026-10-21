@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,13 +11,16 @@ import (
 
 	"github.com/kothagpt/kotha/internal/concurrency"
 	"github.com/kothagpt/kotha/internal/config"
+	"github.com/kothagpt/kotha/internal/fileutil"
 	"github.com/kothagpt/kotha/internal/llm/models"
 	"github.com/kothagpt/kotha/internal/llm/prompt"
 	"github.com/kothagpt/kotha/internal/llm/provider"
 	"github.com/kothagpt/kotha/internal/llm/tools"
 	"github.com/kothagpt/kotha/internal/logging"
+	"github.com/kothagpt/kotha/internal/observability"
 	"github.com/kothagpt/kotha/internal/message"
 	"github.com/kothagpt/kotha/internal/permission"
+	"github.com/kothagpt/kotha/internal/plugin"
 	"github.com/kothagpt/kotha/internal/pubsub"
 	"github.com/kothagpt/kotha/internal/session"
 	"github.com/kothagpt/kotha/internal/toolcall"
@@ -26,6 +30,8 @@ import (
 var (
 	ErrRequestCancelled = errors.New("request cancelled by user")
 	ErrSessionBusy      = errors.New("session is currently processing another request")
+	// ErrRetryRequested is a sentinel error indicating the retry hook requested a retry.
+	ErrRetryRequested = errors.New("retry requested by hook")
 )
 
 type AgentEventType string
@@ -56,6 +62,7 @@ type Service interface {
 	IsBusy() bool
 	Update(agentName config.AgentName, modelID models.ModelID) (models.Model, error)
 	Summarize(ctx context.Context, sessionID string) error
+	Meter() *observability.Meter
 }
 
 type agent struct {
@@ -74,6 +81,46 @@ type agent struct {
 
 	configProvider config.ConfigProvider
 	logger         logging.Logger
+	meter          *observability.Meter
+
+	// fileLock coordinates edits to the same file across concurrent
+	// agent sessions. Nil when coordination is disabled.
+	fileLock *FileLock
+
+	// promptChain intercepts user prompts before admission (persistence
+	// and LLM dispatch). Nil-safe: no interceptors when nil.
+	promptChain *plugin.Chain
+
+	// promptPipeline handles staged prompt preparation with idempotency,
+	// interruptibility, and revert-on-failure.
+	promptPipeline *plugin.PreparationPipeline
+
+	// retryHookRegistry holds retry hooks for provider failure handling.
+	// Nil-safe: no retry hooks when nil.
+	retryHookRegistry *plugin.RetryHookRegistry
+}
+
+// AgentOption customizes an agent at construction.
+type AgentOption func(*agent)
+
+// WithPromptChain installs a prompt-interceptor chain. Every prompt is run
+// through the chain before it is persisted or sent to the provider; a
+// rejection produces an error event instead of starting a run.
+func WithPromptChain(chain *plugin.Chain) AgentOption {
+	return func(a *agent) { a.promptChain = chain }
+}
+
+// WithPromptPipeline installs a preparation pipeline for staged prompt
+// preparation with idempotency, hooks, and revert-on-failure.
+func WithPromptPipeline(pipeline *plugin.PreparationPipeline) AgentOption {
+	return func(a *agent) { a.promptPipeline = pipeline }
+}
+
+// WithRetryHookRegistry installs a retry hook registry for provider failure
+// handling. When a provider operation fails, the retry hooks are consulted
+// to decide whether to retry, fail, or use a fallback.
+func WithRetryHookRegistry(registry *plugin.RetryHookRegistry) AgentOption {
+	return func(a *agent) { a.retryHookRegistry = registry }
 }
 
 func NewAgent(
@@ -84,6 +131,7 @@ func NewAgent(
 	agentTools []tools.BaseTool,
 	configProvider config.ConfigProvider,
 	logger logging.Logger,
+	opts ...AgentOption,
 ) (Service, error) {
 	agentProvider, err := createAgentProvider(agentName, configProvider)
 	if err != nil {
@@ -117,6 +165,14 @@ func NewAgent(
 		activeRequests:    sync.Map{},
 		configProvider:    configProvider,
 		logger:            logger,
+		meter:             observability.NewMeter(),
+		fileLock:          NewFileLock(30 * time.Second),
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(agent)
+		}
 	}
 
 	return agent, nil
@@ -127,7 +183,6 @@ func (a *agent) Model() models.Model {
 }
 
 func (a *agent) Cancel(sessionID string) {
-	// Cancel regular requests
 	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID); exists {
 		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
 			a.logger.InfoPersist(fmt.Sprintf("Request cancellation initiated for session: %s", sessionID))
@@ -211,11 +266,22 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	if !a.provider.Model().SupportsAttachments && attachments != nil {
 		attachments = nil
 	}
-	events := make(chan AgentEvent, 1)
+
+	// Plugin admission gate: run prompt interceptors before anything is
+	// persisted or dispatched. A rejection surfaces as an error event.
+	content, attachments, admitErr := a.admitPrompt(ctx, sessionID, content, attachments)
+	if admitErr != nil {
+		events := make(chan AgentEvent, 1)
+		events <- a.err(admitErr)
+		close(events)
+		return events, nil
+	}
+
 	if a.IsSessionBusy(sessionID) {
 		return nil, ErrSessionBusy
 	}
 
+	events := make(chan AgentEvent, 1)
 	genCtx, cancel := context.WithCancel(ctx)
 
 	a.activeRequests.Store(sessionID, cancel)
@@ -234,6 +300,9 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 			}
 		}()
 		a.logger.Debug("Request started", "sessionID", sessionID)
+		if a.meter != nil {
+			a.meter.AgentRuns.Add(1)
+		}
 		var attachmentParts []message.ContentPart
 		for _, attachment := range attachments {
 			attachmentParts = append(attachmentParts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: attachment.Content})
@@ -242,11 +311,98 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		if result.Error != nil && !errors.Is(result.Error, ErrRequestCancelled) && !errors.Is(result.Error, context.Canceled) {
 			a.logger.ErrorPersist(result.Error.Error())
 		}
+		if a.meter != nil {
+			a.meter.Report()
+		}
 		a.logger.Debug("Request completed", "sessionID", sessionID)
 		a.Publish(pubsub.CreatedEvent, result)
 		concurrency.Send(genCtx, events, result)
 	}()
 	return events, nil
+}
+
+// admitPrompt runs the prompt-interceptor chain (if installed) against the
+// user prompt. Interceptors may rewrite the content or attachments; a
+// rejection (including an empty rewrite) is returned as an error.
+func (a *agent) admitPrompt(ctx context.Context, sessionID, content string, attachments []message.Attachment) (string, []message.Attachment, error) {
+	// Legacy chain support
+	if a.promptChain != nil && a.promptChain.Len() > 0 {
+		req := &plugin.PromptRequest{
+			SessionID:   sessionID,
+			Content:     content,
+			Attachments: attachments,
+		}
+		if err := a.promptChain.Intercept(ctx, req); err != nil {
+			return "", nil, err
+		}
+		if strings.TrimSpace(req.Content) == "" {
+			return "", nil, &plugin.BlockedError{Interceptor: "agent", Reason: "prompt is empty after interceptors"}
+		}
+		return req.Content, req.Attachments, nil
+	}
+
+	// New preparation pipeline
+	if a.promptPipeline != nil {
+		// Build rich PromptRequest from legacy params
+		req := &plugin.PromptRequest{
+			SessionID:   sessionID,
+			Text:        content,
+			Delivery:    plugin.DeliveryDirect,
+			AdmissionID: generateAdmissionID(sessionID, content),
+		}
+		for _, att := range attachments {
+			req.Files = append(req.Files, plugin.FileDraft{
+				ID:       generateFileDraftID(),
+				Path:     att.FilePath,
+				Name:     att.FileName,
+				Size:     int64(len(att.Content)),
+				MIMEType: att.MimeType,
+				Content:  att.Content,
+				Prepared: true,
+			})
+		}
+
+		if err := a.promptPipeline.Prepare(ctx, req); err != nil {
+			return "", nil, err
+		}
+		if req.AlreadyAdmitted {
+			return "", nil, &plugin.BlockedError{Interceptor: "idempotency", Reason: "prompt already admitted"}
+		}
+		if req.Prepared {
+			// Convert back to legacy format for processGeneration
+			content = req.Text
+			attachments = make([]message.Attachment, len(req.Files))
+			for i, f := range req.Files {
+				attachments[i] = message.Attachment{
+					FilePath: f.Path,
+					FileName: f.Name,
+					MimeType: f.MIMEType,
+					Content:  f.Content,
+				}
+			}
+		}
+		return content, attachments, nil
+	}
+
+	return content, attachments, nil
+}
+
+// generateAdmissionID creates a deterministic ID for idempotency.
+func generateAdmissionID(sessionID, content string) string {
+	// Simple hash-based ID; in production could use crypto
+	h := 0
+	for _, c := range sessionID + "|" + content {
+		h = h*31 + int(c)
+	}
+	if h < 0 {
+		h = -h
+	}
+	return fmt.Sprintf("adm-%x", h)
+}
+
+// generateFileDraftID creates a unique draft ID.
+func generateFileDraftID() string {
+	return fmt.Sprintf("fd-%x", time.Now().UnixNano())
 }
 
 func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
@@ -308,6 +464,12 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		}
 		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
 		if err != nil {
+			// Check if retry was requested
+			if errors.Is(err, ErrRetryRequested) {
+				a.logger.InfoPersist(fmt.Sprintf("Retrying generation for session %s", sessionID))
+				// Restart the generation loop
+				continue
+			}
 			if errors.Is(err, context.Canceled) {
 				agentMessage.AddFinish(message.FinishReasonCanceled)
 				_ = a.messages.Update(context.Background(), agentMessage)
@@ -363,6 +525,11 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	// Process each event in the stream.
 	for event := range eventChan {
 		if processErr := a.processEvent(ctx, sessionID, &assistantMsg, event); processErr != nil {
+			// Check if retry was requested
+			if errors.Is(processErr, ErrRetryRequested) {
+				// Return a special error that signals retry to the caller
+				return assistantMsg, nil, ErrRetryRequested
+			}
 			a.finishMessage(ctx, &assistantMsg, message.FinishReasonCanceled)
 			return assistantMsg, nil, processErr
 		}
@@ -412,12 +579,29 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				}
 				continue
 			}
+			// Coordinate edits to the same file across concurrent agent
+			// sessions. Write/edit tools expose a file path; non-file tools
+			// are unaffected.
+			filePath := extractFilePath(toolCall.Input)
+			if filePath != "" && a.fileLock != nil {
+				if lockErr := a.fileLock.Acquire(ctx, sessionID, filePath); lockErr != nil {
+					toolResults[i] = message.ToolResult{
+						ToolCallID: toolCall.ID,
+						Content:    lockErr.Error(),
+						IsError:    true,
+					}
+					continue
+				}
+			}
 			start := time.Now()
 			toolResult, toolErr := tool.Run(ctx, tools.ToolCall{
 				ID:    toolCall.ID,
 				Name:  toolCall.Name,
 				Input: toolCall.Input,
 			})
+			if filePath != "" && a.fileLock != nil {
+				a.fileLock.Release(sessionID, filePath)
+			}
 			// Record the tool invocation for history and cost auditing.
 			a.recordToolCall(ctx, sessionID, assistantMsg.ID, toolCall, toolResult, toolErr, time.Since(start))
 			if toolErr != nil {
@@ -476,6 +660,13 @@ func (a *agent) recordToolCall(ctx context.Context, sessionID, messageID string,
 	if a.toolcalls == nil {
 		return
 	}
+	if a.meter != nil {
+		a.meter.ToolCalls.Add(1)
+		if runErr != nil || result.IsError {
+			a.meter.ToolErrors.Add(1)
+		}
+		a.meter.Latency.Record(float64(duration.Milliseconds()))
+	}
 	isError := runErr != nil || result.IsError
 	output := result.Content
 	if runErr != nil {
@@ -528,6 +719,39 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 			a.logger.InfoPersist(fmt.Sprintf("Event processing canceled for session: %s", sessionID))
 			return context.Canceled
 		}
+
+		// Check retry hooks for provider failure
+		if a.retryHookRegistry != nil {
+			retryCtx := &plugin.RetryContext{
+				SessionID:    sessionID,
+				Attempt:      1, // This is the first agent-level retry attempt
+				MaxAttempts:  1, // Only one agent-level retry by default
+				Error:        event.Error,
+				ProviderName: string(a.provider.Model().Provider),
+				ModelID:      string(a.provider.Model().ID),
+				IsStream:     true,
+			}
+
+			decision, err := a.retryHookRegistry.EvaluateRetryHooks(ctx, retryCtx)
+			if err != nil {
+				a.logger.ErrorPersist(fmt.Sprintf("Retry hook error: %v", err))
+			}
+
+			switch decision {
+			case plugin.RetryDecisionRetry:
+				a.logger.InfoPersist(fmt.Sprintf("Retrying request for session %s per retry hook", sessionID))
+				// Return special error to signal retry to the caller
+				return ErrRetryRequested
+			case plugin.RetryDecisionUseFallback:
+				a.logger.InfoPersist(fmt.Sprintf("Using fallback for session %s per retry hook", sessionID))
+				// Could implement fallback logic here
+			case plugin.RetryDecisionFail:
+				fallthrough
+			default:
+				// Default: fail
+			}
+		}
+
 		a.logger.ErrorPersist(event.Error.Error())
 		return event.Error
 	case provider.EventComplete:
@@ -542,6 +766,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	return nil
 }
 
+// TrackUsage records token usage and cost for a session.
 func (a *agent) TrackUsage(ctx context.Context, sessionID string, model models.Model, usage provider.TokenUsage) error {
 	sess, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -806,4 +1031,24 @@ func createAgentProvider(agentName config.AgentName, configProvider config.Confi
 	}
 
 	return agentProvider, nil
+}
+
+func (a *agent) Meter() *observability.Meter {
+	return a.meter
+}
+
+// extractFilePath pulls a file_path field out of a tool call's JSON input.
+// Returns "" for tools that don't operate on files.
+// Expands tilde (~) in the path so lock keys match the expanded paths used by tools.
+func extractFilePath(input string) string {
+	if input == "" {
+		return ""
+	}
+	var parsed struct {
+		FilePath string `json:"file_path"`
+	}
+	if err := json.Unmarshal([]byte(input), &parsed); err != nil {
+		return ""
+	}
+	return fileutil.ExpandTilde(parsed.FilePath)
 }

@@ -111,6 +111,30 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.searchSessionsStmt, err = db.PrepareContext(ctx, searchSessions); err != nil {
 		return nil, fmt.Errorf("error preparing query SearchSessions: %w", err)
 	}
+	if q.createSymbolStmt, err = db.PrepareContext(ctx, createSymbol); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateSymbol: %w", err)
+	}
+	if q.getSymbolStmt, err = db.PrepareContext(ctx, getSymbol); err != nil {
+		return nil, fmt.Errorf("error preparing query GetSymbol: %w", err)
+	}
+	if q.listSymbolsBySessionStmt, err = db.PrepareContext(ctx, listSymbolsBySession); err != nil {
+		return nil, fmt.Errorf("error preparing query ListSymbolsBySession: %w", err)
+	}
+	if q.listSymbolsByFileStmt, err = db.PrepareContext(ctx, listSymbolsByFile); err != nil {
+		return nil, fmt.Errorf("error preparing query ListSymbolsByFile: %w", err)
+	}
+	if q.searchSymbolsStmt, err = db.PrepareContext(ctx, searchSymbols); err != nil {
+		return nil, fmt.Errorf("error preparing query SearchSymbols: %w", err)
+	}
+	if q.deleteSymbolStmt, err = db.PrepareContext(ctx, deleteSymbol); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSymbol: %w", err)
+	}
+	if q.deleteSessionSymbolsStmt, err = db.PrepareContext(ctx, deleteSessionSymbols); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteSessionSymbols: %w", err)
+	}
+	if q.deleteFileSymbolsStmt, err = db.PrepareContext(ctx, deleteFileSymbols); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteFileSymbols: %w", err)
+	}
 	return &q, nil
 }
 
@@ -261,6 +285,46 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing searchSessionsStmt: %w", cerr)
 		}
 	}
+	if q.createSymbolStmt != nil {
+		if cerr := q.createSymbolStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createSymbolStmt: %w", cerr)
+		}
+	}
+	if q.getSymbolStmt != nil {
+		if cerr := q.getSymbolStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getSymbolStmt: %w", cerr)
+		}
+	}
+	if q.listSymbolsBySessionStmt != nil {
+		if cerr := q.listSymbolsBySessionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listSymbolsBySessionStmt: %w", cerr)
+		}
+	}
+	if q.listSymbolsByFileStmt != nil {
+		if cerr := q.listSymbolsByFileStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listSymbolsByFileStmt: %w", cerr)
+		}
+	}
+	if q.searchSymbolsStmt != nil {
+		if cerr := q.searchSymbolsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing searchSymbolsStmt: %w", cerr)
+		}
+	}
+	if q.deleteSymbolStmt != nil {
+		if cerr := q.deleteSymbolStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSymbolStmt: %w", cerr)
+		}
+	}
+	if q.deleteSessionSymbolsStmt != nil {
+		if cerr := q.deleteSessionSymbolsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteSessionSymbolsStmt: %w", cerr)
+		}
+	}
+	if q.deleteFileSymbolsStmt != nil {
+		if cerr := q.deleteFileSymbolsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteFileSymbolsStmt: %w", cerr)
+		}
+	}
 	return err
 }
 
@@ -303,32 +367,40 @@ type Queries struct {
 	createFileStmt              *sql.Stmt
 	createMessageStmt           *sql.Stmt
 	createSessionStmt           *sql.Stmt
+	createSymbolStmt            *sql.Stmt
+	createToolCallStmt          *sql.Stmt
 	deleteFileStmt              *sql.Stmt
 	deleteMessageStmt           *sql.Stmt
 	deleteSessionStmt           *sql.Stmt
 	deleteSessionFilesStmt      *sql.Stmt
 	deleteSessionMessagesStmt   *sql.Stmt
+	deleteSessionSymbolsStmt    *sql.Stmt
+	deleteSessionToolCallsStmt  *sql.Stmt
+	deleteFileSymbolsStmt       *sql.Stmt
+	deleteSymbolStmt            *sql.Stmt
+	deleteToolCallStmt          *sql.Stmt
 	getFileStmt                 *sql.Stmt
 	getFileByPathAndSessionStmt *sql.Stmt
 	getMessageStmt              *sql.Stmt
 	getSessionByIDStmt          *sql.Stmt
+	getSymbolStmt               *sql.Stmt
+	getToolCallStmt             *sql.Stmt
+	getToolCallByToolCallIDStmt *sql.Stmt
 	listFilesByPathStmt         *sql.Stmt
 	listFilesBySessionStmt      *sql.Stmt
 	listLatestSessionFilesStmt  *sql.Stmt
 	listMessagesBySessionStmt   *sql.Stmt
 	listNewFilesStmt            *sql.Stmt
 	listSessionsStmt            *sql.Stmt
+	listSymbolsByFileStmt       *sql.Stmt
+	listSymbolsBySessionStmt    *sql.Stmt
+	listToolCallsBySessionStmt  *sql.Stmt
+	listToolCallsByMessageStmt  *sql.Stmt
+	searchSessionsStmt          *sql.Stmt
+	searchSymbolsStmt           *sql.Stmt
 	updateFileStmt              *sql.Stmt
 	updateMessageStmt           *sql.Stmt
 	updateSessionStmt           *sql.Stmt
-	createToolCallStmt          *sql.Stmt
-	getToolCallStmt             *sql.Stmt
-	getToolCallByToolCallIDStmt *sql.Stmt
-	listToolCallsBySessionStmt  *sql.Stmt
-	listToolCallsByMessageStmt  *sql.Stmt
-	deleteToolCallStmt          *sql.Stmt
-	deleteSessionToolCallsStmt  *sql.Stmt
-	searchSessionsStmt          *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
@@ -338,31 +410,39 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createFileStmt:              q.createFileStmt,
 		createMessageStmt:           q.createMessageStmt,
 		createSessionStmt:           q.createSessionStmt,
+		createSymbolStmt:            q.createSymbolStmt,
+		createToolCallStmt:          q.createToolCallStmt,
 		deleteFileStmt:              q.deleteFileStmt,
 		deleteMessageStmt:           q.deleteMessageStmt,
 		deleteSessionStmt:           q.deleteSessionStmt,
 		deleteSessionFilesStmt:      q.deleteSessionFilesStmt,
 		deleteSessionMessagesStmt:   q.deleteSessionMessagesStmt,
+		deleteSessionSymbolsStmt:    q.deleteSessionSymbolsStmt,
+		deleteSessionToolCallsStmt:  q.deleteSessionToolCallsStmt,
+		deleteFileSymbolsStmt:       q.deleteFileSymbolsStmt,
+		deleteSymbolStmt:            q.deleteSymbolStmt,
+		deleteToolCallStmt:          q.deleteToolCallStmt,
 		getFileStmt:                 q.getFileStmt,
 		getFileByPathAndSessionStmt: q.getFileByPathAndSessionStmt,
 		getMessageStmt:              q.getMessageStmt,
 		getSessionByIDStmt:          q.getSessionByIDStmt,
+		getSymbolStmt:               q.getSymbolStmt,
+		getToolCallStmt:             q.getToolCallStmt,
+		getToolCallByToolCallIDStmt: q.getToolCallByToolCallIDStmt,
 		listFilesByPathStmt:         q.listFilesByPathStmt,
 		listFilesBySessionStmt:      q.listFilesBySessionStmt,
 		listLatestSessionFilesStmt:  q.listLatestSessionFilesStmt,
 		listMessagesBySessionStmt:   q.listMessagesBySessionStmt,
 		listNewFilesStmt:            q.listNewFilesStmt,
 		listSessionsStmt:            q.listSessionsStmt,
+		listSymbolsByFileStmt:       q.listSymbolsByFileStmt,
+		listSymbolsBySessionStmt:    q.listSymbolsBySessionStmt,
+		listToolCallsBySessionStmt:  q.listToolCallsBySessionStmt,
+		listToolCallsByMessageStmt:  q.listToolCallsByMessageStmt,
+		searchSessionsStmt:          q.searchSessionsStmt,
+		searchSymbolsStmt:           q.searchSymbolsStmt,
 		updateFileStmt:              q.updateFileStmt,
 		updateMessageStmt:           q.updateMessageStmt,
 		updateSessionStmt:           q.updateSessionStmt,
-		createToolCallStmt:          q.createToolCallStmt,
-		getToolCallStmt:             q.getToolCallStmt,
-		getToolCallByToolCallIDStmt: q.getToolCallByToolCallIDStmt,
-		listToolCallsBySessionStmt:  q.listToolCallsBySessionStmt,
-		listToolCallsByMessageStmt:  q.listToolCallsByMessageStmt,
-		deleteToolCallStmt:          q.deleteToolCallStmt,
-		deleteSessionToolCallsStmt:  q.deleteSessionToolCallsStmt,
-		searchSessionsStmt:          q.searchSessionsStmt,
 	}
 }

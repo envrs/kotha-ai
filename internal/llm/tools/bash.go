@@ -13,18 +13,23 @@ import (
 )
 
 type BashParams struct {
-	Command string `json:"command"`
-	Timeout int    `json:"timeout"`
+	Command   string `json:"command"`
+	Timeout   int    `json:"timeout"`
+	Background bool  `json:"background,omitempty"`
 }
 
 type BashPermissionsParams struct {
-	Command string `json:"command"`
-	Timeout int    `json:"timeout"`
+	Command   string `json:"command"`
+	Timeout   int    `json:"timeout"`
+	Background bool  `json:"background,omitempty"`
 }
 
 type BashResponseMetadata struct {
-	StartTime int64 `json:"start_time"`
-	EndTime   int64 `json:"end_time"`
+	StartTime  int64  `json:"start_time"`
+	EndTime    int64  `json:"end_time"`
+	ShellID    string `json:"shell_id,omitempty"`
+	OutputFile string `json:"output_file,omitempty"`
+	ErrorFile  string `json:"error_file,omitempty"`
 }
 type bashTool struct {
 	permissions permission.Service
@@ -222,6 +227,10 @@ func (b *bashTool) Info() ToolInfo {
 				"type":        "number",
 				"description": "Optional timeout in milliseconds (max 600000)",
 			},
+			"background": map[string]any{
+				"type":        "boolean",
+				"description": "If true, run the command in the background and return a shell ID for polling. Use ReadBashOutput to read live output.",
+			},
 		},
 		Required: []string{"command"},
 	}
@@ -285,9 +294,47 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	}
 	startTime := time.Now()
 	shell := shell.GetPersistentShell(config.WorkingDirectory())
+
+	if params.Background {
+		// Explicit backgrounding path: run the command in the background
+		// and return a shell ID the caller can use to poll live output.
+		bc, err := shell.StartBackground(ctx, params.Command, params.Timeout)
+		if err != nil {
+			return ToolResponse{}, fmt.Errorf("error starting background command: %w", err)
+		}
+		metadata := BashResponseMetadata{
+			StartTime:  startTime.UnixMilli(),
+			ShellID:    bc.ID,
+			OutputFile: bc.OutputFile,
+			ErrorFile:  bc.ErrorFile,
+		}
+		return WithResponseMetadata(NewTextResponse(fmt.Sprintf("Background command started with shell ID: %s\nOutput file: %s\nError file: %s", bc.ID, bc.OutputFile, bc.ErrorFile)), metadata), nil
+	}
+
 	stdout, stderr, exitCode, interrupted, err := shell.Exec(ctx, params.Command, params.Timeout)
 	if err != nil {
 		return ToolResponse{}, fmt.Errorf("error executing command: %w", err)
+	}
+
+	// Auto-backgrounding path: if a foreground command did not finish before
+	// its timeout, restart it in the background so it keeps running and can
+	// be polled with the read_bash_output tool instead of being lost.
+	if interrupted {
+		bc, bgErr := shell.StartBackground(ctx, params.Command, params.Timeout)
+		if bgErr == nil {
+			metadata := BashResponseMetadata{
+				StartTime:  startTime.UnixMilli(),
+				ShellID:    bc.ID,
+				OutputFile: bc.OutputFile,
+				ErrorFile:  bc.ErrorFile,
+			}
+			msg := fmt.Sprintf("Command timed out after %dms and has been moved to the background.\n"+
+				"Shell ID: %s\nOutput file: %s\nError file: %s\n"+
+				"Use the read_bash_output tool with shell_id %q to poll its interim output.",
+				params.Timeout, bc.ID, bc.OutputFile, bc.ErrorFile, bc.ID)
+			return WithResponseMetadata(NewTextResponse(msg), metadata), nil
+		}
+		// If backgrounding failed, fall through to the normal timeout report.
 	}
 
 	stdout = truncateOutput(stdout)

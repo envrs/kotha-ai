@@ -9,6 +9,7 @@ import (
 	"github.com/kothagpt/kotha/internal/llm/agent"
 	"github.com/kothagpt/kotha/internal/llm/models"
 	"github.com/kothagpt/kotha/internal/message"
+	"github.com/kothagpt/kotha/internal/observability"
 	"github.com/kothagpt/kotha/internal/permission"
 	"github.com/kothagpt/kotha/internal/pubsub"
 	"github.com/kothagpt/kotha/internal/session"
@@ -70,6 +71,7 @@ func (f *fakeAgent) Update(_ config.AgentName, _ models.ModelID) (models.Model, 
 	return models.Model{ID: "mock"}, nil
 }
 func (f *fakeAgent) Summarize(_ context.Context, _ string) error { return nil }
+func (f *fakeAgent) Meter() *observability.Meter { return observability.NewMeter() }
 func (f *fakeAgent) Subscribe(_ context.Context) <-chan pubsub.Event[agent.AgentEvent] {
 	ch := make(chan pubsub.Event[agent.AgentEvent])
 	close(ch)
@@ -172,5 +174,37 @@ func TestDrain(t *testing.T) {
 	_, err := Drain(evs, func(ev agent.AgentEvent) { seen = append(seen, ev.Progress) })
 	if err != nil || len(seen) != 2 || seen[0] != "p1" {
 		t.Fatalf("drain=%v %v", seen, err)
+	}
+}
+
+func TestWithToolsCreatesAgent(t *testing.T) {
+	// Test that WithTools + WithAgentConfig creates an agent with custom tools
+	evs := make(chan agent.AgentEvent, 2)
+	evs <- agent.AgentEvent{Type: agent.AgentEventTypeResponse, Progress: "thinking"}
+	evs <- agent.AgentEvent{Type: agent.AgentEventTypeResponse, Message: message.Message{ID: "m1", Parts: []message.ContentPart{message.TextContent{Text: "done"}}}}
+	close(evs)
+
+	fakeA := &fakeAgent{events: evs}
+
+	// Test WithAgent (pre-configured agent)
+	c1 := NewClient(&fakeSession{}, nil, fakeA, &fakePermission{})
+	res, err := c1.Ask(context.Background(), "s1", "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Message.Content().String() != "done" {
+		t.Fatalf("WithAgent: result=%+v", res)
+	}
+
+	// Test that WithTools without WithAgentConfig fails gracefully
+	c2 := NewClient(&fakeSession{}, nil, nil, &fakePermission{}, WithTools(BashTool))
+	if _, err := c2.Ask(context.Background(), "s1", "hi"); err == nil {
+		t.Fatal("expected ErrNoAgent when WithTools used without WithAgentConfig")
+	}
+
+	// Test mutual exclusion of WithTools and WithAgent
+	c3 := NewClient(&fakeSession{}, nil, fakeA, &fakePermission{}, WithTools(BashTool))
+	if _, err := c3.Ask(context.Background(), "s1", "hi"); err == nil {
+		t.Fatal("expected error when both WithAgent and WithTools provided")
 	}
 }

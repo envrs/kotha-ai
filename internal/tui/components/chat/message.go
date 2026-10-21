@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
+	zone "github.com/lrstanley/bubblezone"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/kothagpt/kotha/internal/config"
@@ -167,6 +169,7 @@ func renderAssistantMessage(
 	isSummary bool,
 	width int,
 	position int,
+	zonePrefix string,
 ) []uiMessage {
 	messages := []uiMessage{}
 	content := msg.Content().String()
@@ -251,6 +254,7 @@ func renderAssistantMessage(
 			false,
 			width,
 			i+1,
+			zonePrefix,
 		)
 		messages = append(messages, toolCallContent)
 		position += toolCallContent.height
@@ -493,7 +497,7 @@ func truncateHeight(content string, height int) string {
 	return content
 }
 
-func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, width int) string {
+func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, width int, zonePrefix string) string {
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
@@ -509,16 +513,20 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 	resultContent := truncateHeight(response.Content, maxResultHeight)
 	switch toolCall.Name {
 	case agent.AgentToolName:
-		return styles.ForceReplaceBackgroundWithLipgloss(
+		rendered := styles.ForceReplaceBackgroundWithLipgloss(
 			toMarkdown(resultContent, false, width),
 			t.Background(),
 		)
+		// Make subagent launch references clickable
+		return makeSubagentLaunchesClickable(rendered, toolCall.ID, zonePrefix, width)
 	case tools.BashToolName:
 		resultContent = fmt.Sprintf("```bash\n%s\n```", resultContent)
-		return styles.ForceReplaceBackgroundWithLipgloss(
+		rendered := styles.ForceReplaceBackgroundWithLipgloss(
 			toMarkdown(resultContent, true, width),
 			t.Background(),
 		)
+		// Make shell IDs clickable for background commands
+		return makeShellIDsClickable(rendered, toolCall.ID, zonePrefix, width)
 	case tools.EditToolName:
 		metadata := tools.EditResponseMetadata{}
 		_ = json.Unmarshal([]byte(response.Metadata), &metadata)
@@ -595,6 +603,7 @@ func renderToolMessage(
 	nested bool,
 	width int,
 	position int,
+	zonePrefix string,
 	toolIndex ...map[string]message.ToolResult,
 ) uiMessage {
 	if nested {
@@ -641,7 +650,7 @@ func renderToolMessage(
 	params := renderToolParams(width-2-lipgloss.Width(toolNameText), toolCall)
 	responseContent := ""
 	if response != nil {
-		responseContent = renderToolResponse(toolCall, *response, width-2)
+		responseContent = renderToolResponse(toolCall, *response, width-2, zonePrefix)
 		responseContent = strings.TrimSuffix(responseContent, "\n")
 	} else {
 		responseContent = baseStyle.
@@ -677,7 +686,7 @@ func renderToolMessage(
 			toolCalls = append(toolCalls, v.ToolCalls()...)
 		}
 		for _, call := range toolCalls {
-			rendered := renderToolMessage(call, []message.Message{}, messagesService, focusedUIMessageId, true, width, 0)
+			rendered := renderToolMessage(call, []message.Message{}, messagesService, focusedUIMessageId, true, width, 0, "", nil)
 			parts = append(parts, rendered.content)
 		}
 	}
@@ -716,4 +725,73 @@ func formatTimestampDiff(start, end int64) string {
 		return fmt.Sprintf("%.1fs", diffSeconds)
 	}
 	return fmt.Sprintf("%.1fm", diffSeconds/60)
+}
+
+// shellIDPattern matches "Shell ID: <uuid>" or "shell_id: <uuid>" patterns.
+var shellIDPattern = regexp.MustCompile(`(?i)(Shell\s+ID|shell[_-]?id)\s*[:=]\s*([a-f0-9-]{36})`)
+
+// clickableShellID wraps a shell ID in a bubblezone for click handling.
+// The zone ID format is "shell:<toolCallID>:<shellID>" for background tools
+// or "subagent:<sessionID>:<launchIdx>" for subagent launches.
+func clickableShellID(content, toolCallID, shellID, zonePrefix string, width int) string {
+	if toolCallID == "" || shellID == "" || zonePrefix == "" {
+		return content
+	}
+	zoneID := zonePrefix + fmt.Sprintf("shell:%s:%s", toolCallID, shellID)
+	return zone.Mark(zoneID, content)
+}
+
+// clickableSubagentLaunch wraps a subagent launch reference for click handling.
+// The zone ID format is "subagent:<sessionID>:<launchIdx>".
+func clickableSubagentLaunch(content, sessionID string, launchIdx int, zonePrefix string, width int) string {
+	if sessionID == "" || zonePrefix == "" {
+		return content
+	}
+	zoneID := zonePrefix + fmt.Sprintf("subagent:%s:%d", sessionID, launchIdx)
+	return zone.Mark(zoneID, content)
+}
+
+
+// extractShellIDs finds all shell IDs in content and returns their positions.
+// Returns a slice of (start, end, shellID, toolCallIDHint).
+
+// makeShellIDsClickable wraps shell IDs in content with bubblezone marks for clicking.
+// toolCallID is the originating tool call ID for correlation.
+func makeShellIDsClickable(content, toolCallID, zonePrefix string, width int) string {
+	if toolCallID == "" || zonePrefix == "" {
+		return content
+	}
+	return shellIDPattern.ReplaceAllStringFunc(content, func(match string) string {
+		// Extract the shell ID from the match
+		submatches := shellIDPattern.FindStringSubmatch(match)
+		if len(submatches) < 3 {
+			return match
+		}
+		shellID := submatches[2]
+		return clickableShellID(match, toolCallID, shellID, zonePrefix, width)
+	})
+}
+
+// subagentLaunchPattern matches subagent launch references.
+var subagentLaunchPattern = regexp.MustCompile(`(?i)subagent\s+launch\s+#?(\d+)\s+\(session:\s*([a-f0-9-]{36})\)`)
+
+// makeSubagentLaunchesClickable wraps subagent launch references with bubblezone marks.
+func makeSubagentLaunchesClickable(content, sessionID, zonePrefix string, width int) string {
+	if sessionID == "" || zonePrefix == "" {
+		return content
+	}
+	return subagentLaunchPattern.ReplaceAllStringFunc(content, func(match string) string {
+		submatches := subagentLaunchPattern.FindStringSubmatch(match)
+		if len(submatches) < 3 {
+			return match
+		}
+		launchIdx := submatches[1]
+		return clickableSubagentLaunch(match, sessionID, parseLaunchIdx(launchIdx), zonePrefix, width)
+	})
+}
+
+func parseLaunchIdx(s string) int {
+	var idx int
+	_, _ = fmt.Sscanf(s, "%d", &idx)
+	return idx
 }

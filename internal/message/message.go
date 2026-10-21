@@ -145,7 +145,7 @@ func (s *service) List(ctx context.Context, sessionID string) ([]Message, error)
 }
 
 func (s *service) fromDBItem(item db.Message) (Message, error) {
-	parts, err := unmarshallParts([]byte(item.Parts))
+	parts, err := UnmarshallParts([]byte(item.Parts))
 	if err != nil {
 		return Message{}, err
 	}
@@ -210,9 +210,9 @@ func marshallParts(parts []ContentPart) ([]byte, error) {
 	return json.Marshal(wrappedParts)
 }
 
-func unmarshallParts(data []byte) ([]ContentPart, error) {
+// UnmarshallParts parses a JSON-encoded message parts array.
+func UnmarshallParts(data []byte) ([]ContentPart, error) {
 	temp := []json.RawMessage{}
-
 	if err := json.Unmarshal(data, &temp); err != nil {
 		return nil, err
 	}

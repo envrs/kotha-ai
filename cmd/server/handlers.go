@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/llm/agent"
 	"github.com/kothagpt/kotha/internal/llm/models"
@@ -203,6 +205,40 @@ func (s *Server) handleSearchSessions(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, sessions)
 }
 
+// handleRecall serves GET /v1/recall?session_id=&limit=.
+func (s *Server) handleRecall(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 5
+	if v := q.Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	result, err := s.app.History.RecallContext(r.Context(), q.Get("session_id"), limit)
+	if err != nil {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	s.writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleDiffSessions(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	path := q.Get("path")
+	oldSessionID := q.Get("old")
+	newSessionID := q.Get("new")
+	if path == "" || oldSessionID == "" || newSessionID == "" {
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path, old, and new query parameters are required"})
+		return
+	}
+	result, err := s.app.History.DiffSessions(r.Context(), path, oldSessionID, newSessionID)
+	if err != nil {
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	s.writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request) {
 	var body updateModelRequest
 	if err := s.readJSON(w, r, &body); err != nil {
@@ -322,4 +358,58 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	result.Message.ID = final.Message.ID
 	result.Message.Role = string(final.Message.Role)
 	s.writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAskWebSocket(w http.ResponseWriter, r *http.Request) {
+	var body askRequest
+	if err := s.readJSON(w, r, &body); err != nil {
+		return
+	}
+	if strings.TrimSpace(body.Prompt) == "" {
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "prompt is required"})
+		return
+	}
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "websocket upgrade failed"})
+		return
+	}
+	defer func() { _ = conn.Close() }()
+	sid := s.sessionID(r)
+	if body.AutoApprove {
+		s.app.Permissions.AutoApproveSession(sid)
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+	events, err := s.app.CoderAgent.Run(ctx, sid, body.Prompt)
+	if err != nil {
+		_ = conn.WriteJSON(map[string]string{"type": "error", "error": err.Error()})
+		return
+	}
+	for ev := range events {
+		payload := map[string]any{
+			"type":    string(ev.Type),
+			"message": ev.Message,
+			"done":    ev.Done,
+		}
+		if ev.SessionID != "" {
+			payload["session_id"] = ev.SessionID
+		}
+		if ev.Progress != "" {
+			payload["progress"] = ev.Progress
+		}
+		if ev.Error != nil {
+			payload["error"] = ev.Error.Error()
+		}
+		if err := conn.WriteJSON(payload); err != nil {
+			return
+		}
+		if ev.Done {
+			break
+		}
+	}
+	_ = conn.WriteJSON(map[string]string{"type": "done"})
 }

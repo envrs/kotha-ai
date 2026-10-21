@@ -9,6 +9,14 @@ import (
 	"github.com/kothagpt/kotha/internal/message"
 )
 
+// TestController is an interface for test controllers that can be injected into mock clients.
+// This allows test packages to implement advanced mock behavior without creating circular dependencies.
+type TestController interface {
+	// Stream handles a streaming request and returns a channel of events.
+	// The controller is responsible for recording the call and returning appropriate events.
+	Stream(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent
+}
+
 // MockClient is a scriptable ProviderClient for tests.
 // Queue responses with WithMockResponses / Enqueue; optionally inject errors.
 type MockClient ProviderClient
@@ -21,6 +29,9 @@ type mockClient struct {
 
 	// Captured calls for assertions.
 	Calls []MockCall
+
+	// Optional test controller for advanced test features.
+	controller TestController
 }
 
 type MockCall struct {
@@ -45,6 +56,14 @@ func WithMockError(err error) MockOption {
 func WithMockStreamError(err error) MockOption {
 	return func(m *mockClient) {
 		m.streamErr = err
+	}
+}
+
+// WithMockController sets a test controller on the mock client.
+// This enables advanced test features like request matching and call recording.
+func WithMockController(c TestController) MockOption {
+	return func(m *mockClient) {
+		m.controller = c
 	}
 }
 
@@ -89,6 +108,11 @@ func (m *mockClient) send(_ context.Context, messages []message.Message, tools [
 }
 
 func (m *mockClient) stream(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent {
+	// If a test controller is set, delegate to it for advanced behavior.
+	if m.controller != nil {
+		return m.controller.Stream(ctx, messages, tools)
+	}
+
 	ch := make(chan ProviderEvent, 8)
 	go func() {
 		defer close(ch)

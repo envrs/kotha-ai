@@ -28,6 +28,24 @@ type EditorFocusMsg bool
 // CopyFocusedMsg requests copying the focused message content to clipboard.
 type CopyFocusedMsg struct{}
 
+// JumpToToolMsg requests jumping to a specific tool call in the message history.
+type JumpToToolMsg struct {
+	ToolCallID string
+	ShellID    string
+}
+
+// SelectLaunchMsg requests selecting a specific launch when the same subagent runs multiple times.
+type SelectLaunchMsg struct {
+	SessionID string
+	LaunchIdx int
+}
+
+// ImageEnlargeMsg requests opening an image in the enlarged modal view.
+type ImageEnlargeMsg struct {
+	Data   []byte
+	Format string
+}
+
 func header(width int) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Top,

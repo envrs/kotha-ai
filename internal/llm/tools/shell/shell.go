@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,9 +13,68 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kothagpt/kotha/internal/config"
 	"github.com/kothagpt/kotha/internal/logging"
 )
+
+// BackgroundCommand represents a long-running command executed in the
+// background. Callers can poll the live output file and eventually
+// cancel the command.
+type BackgroundCommand struct {
+	ID          string
+	Command     string
+	StartTime   time.Time
+	OutputFile  string
+	ErrorFile   string
+	StatusFile  string
+	CwdFile     string
+	PID         int
+	done        chan struct{}
+	cancelOnce sync.Once
+	result      commandResult
+	resultMu    sync.Mutex
+	shell       *PersistentShell
+}
+
+// IsDone reports whether the background command has finished.
+func (bc *BackgroundCommand) IsDone() bool {
+	select {
+	case <-bc.done:
+		return true
+	default:
+		return false
+	}
+}
+
+// Wait blocks until the command finishes and returns its result.
+func (bc *BackgroundCommand) Wait() commandResult {
+	<-bc.done
+	bc.resultMu.Lock()
+	defer bc.resultMu.Unlock()
+	return bc.result
+}
+
+// Result returns the command result if the command has finished.
+// Returns nil if the command is still running.
+func (bc *BackgroundCommand) Result() *commandResult {
+	bc.resultMu.Lock()
+	defer bc.resultMu.Unlock()
+	if bc.IsDone() {
+		return &bc.result
+	}
+	return nil
+}
+
+// Cancel kills the background command and its children.
+func (bc *BackgroundCommand) Cancel() {
+	if bc.shell != nil {
+		bc.shell.killChildren()
+	}
+	bc.cancelOnce.Do(func() {
+		close(bc.done)
+	})
+}
 
 type PersistentShell struct {
 	cmd          *exec.Cmd
@@ -24,6 +84,10 @@ type PersistentShell struct {
 	mu           sync.Mutex
 	commandQueue chan *commandExecution
 	closeOnce    sync.Once
+
+	// Background commands keyed by ID.
+	backgrounds   map[string]*BackgroundCommand
+	backgroundsMu sync.RWMutex
 }
 
 type commandExecution struct {
@@ -34,11 +98,11 @@ type commandExecution struct {
 }
 
 type commandResult struct {
-	stdout      string
-	stderr      string
-	exitCode    int
-	interrupted bool
-	err         error
+	Stdout      string
+	Stderr      string
+	ExitCode    int
+	Interrupted bool
+	Err         error
 }
 
 var (
@@ -46,6 +110,14 @@ var (
 	shellInstanceOnce sync.Once
 )
 
+// ResetPersistentShell resets the singleton shell. Only useful for tests.
+func ResetPersistentShell() {
+	shellInstanceOnce = sync.Once{}
+	shellInstance = nil
+}
+
+// GetPersistentShell returns the singleton shell for the given working
+// directory. If the shell dies, a new one is created.
 func GetPersistentShell(workingDir string) *PersistentShell {
 	shellInstanceOnce.Do(func() {
 		shellInstance = newPersistentShell(workingDir)
@@ -54,10 +126,151 @@ func GetPersistentShell(workingDir string) *PersistentShell {
 	if shellInstance == nil {
 		shellInstance = newPersistentShell(workingDir)
 	} else if !shellInstance.isAlive {
-		shellInstance = newPersistentShell(shellInstance.cwd)
+		shellInstance = newPersistentShell(workingDir)
+	}
+	if shellInstance == nil {
+		// Give up cleanly instead of returning a nil shell that callers
+		// would dereference later.
+		logging.Error("Failed to start persistent shell")
+	}
+	return shellInstance
+}
+
+// StartBackground runs a command in the background, returning a handle the
+// caller can use to poll the live output file or cancel the command.
+// This is the explicit backgrounding path.
+func (s *PersistentShell) StartBackground(ctx context.Context, command string, timeoutMs int) (*BackgroundCommand, error) {
+	if !s.isAlive {
+		return nil, errors.New("shell is not alive")
+	}
+	bc := &BackgroundCommand{
+		ID:         uuid.New().String(),
+		Command:    command,
+		StartTime:  time.Now(),
+		done:       make(chan struct{}),
+		shell:      s,
+	}
+	tempDir := os.TempDir()
+	bc.OutputFile = filepath.Join(tempDir, fmt.Sprintf("kotha-bg-out-%s", bc.ID))
+	bc.ErrorFile = filepath.Join(tempDir, fmt.Sprintf("kotha-bg-err-%s", bc.ID))
+	bc.StatusFile = filepath.Join(tempDir, fmt.Sprintf("kotha-bg-status-%s", bc.ID))
+	bc.CwdFile = filepath.Join(tempDir, fmt.Sprintf("kotha-bg-cwd-%s", bc.ID))
+
+	fullCommand := fmt.Sprintf(`
+eval %s < /dev/null > %s 2> %s
+EXEC_EXIT_CODE=$?
+pwd > %s
+echo $EXEC_EXIT_CODE > %s
+`,
+		shellQuote(command),
+		shellQuote(bc.OutputFile),
+		shellQuote(bc.ErrorFile),
+		shellQuote(bc.CwdFile),
+		shellQuote(bc.StatusFile),
+	)
+
+	s.mu.Lock()
+	if !s.isAlive {
+		s.mu.Unlock()
+		return nil, errors.New("shell is not alive")
+	}
+	_, err := s.stdin.Write([]byte(fullCommand + "\n"))
+	s.mu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to write command to shell: %w", err)
 	}
 
-	return shellInstance
+	s.backgroundsMu.Lock()
+	s.backgrounds[bc.ID] = bc
+	s.backgroundsMu.Unlock()
+
+	timeout := time.Duration(timeoutMs) * time.Millisecond
+	if timeoutMs <= 0 {
+		timeout = 30 * time.Minute
+	}
+
+	go func() {
+		defer close(bc.done)
+		startTime := time.Now()
+
+		for {
+			select {
+			case <-ctx.Done():
+				s.killChildren()
+				bc.resultMu.Lock()
+				bc.result.Interrupted = true
+				bc.result.Err = ctx.Err()
+				bc.resultMu.Unlock()
+				return
+			case <-time.After(10 * time.Millisecond):
+				if fileExists(bc.StatusFile) && fileSize(bc.StatusFile) > 0 {
+					stdout := readFileOrEmpty(bc.OutputFile)
+					stderr := readFileOrEmpty(bc.ErrorFile)
+					exitCodeStr := readFileOrEmpty(bc.StatusFile)
+					newCwd := readFileOrEmpty(bc.CwdFile)
+
+					exitCode := 0
+					if exitCodeStr != "" {
+						_, _ = fmt.Sscanf(exitCodeStr, "%d", &exitCode)
+					}
+					if newCwd != "" {
+						s.cwd = strings.TrimSpace(newCwd)
+					}
+					bc.resultMu.Lock()
+				bc.result = commandResult{
+					Stdout:   stdout,
+					Stderr:   stderr,
+					ExitCode: exitCode,
+				}
+					bc.resultMu.Unlock()
+					return
+				}
+				if timeout > 0 && time.Since(startTime) > timeout {
+					s.killChildren()
+					bc.resultMu.Lock()
+					bc.result.Interrupted = true
+					bc.result.Err = errors.New("command timed out")
+					bc.resultMu.Unlock()
+					return
+				}
+			}
+		}
+	}()
+
+	return bc, nil
+}
+
+// GetBackground returns a background command by ID.
+func (s *PersistentShell) GetBackground(id string) *BackgroundCommand {
+	s.backgroundsMu.RLock()
+	defer s.backgroundsMu.RUnlock()
+	return s.backgrounds[id]
+}
+
+// ListBackgrounds returns all background commands.
+func (s *PersistentShell) ListBackgrounds() []*BackgroundCommand {
+	s.backgroundsMu.RLock()
+	defer s.backgroundsMu.RUnlock()
+	out := make([]*BackgroundCommand, 0, len(s.backgrounds))
+	for _, bc := range s.backgrounds {
+		out = append(out, bc)
+	}
+	return out
+}
+
+// CancelBackground cancels a background command by ID.
+func (s *PersistentShell) CancelBackground(id string) bool {
+	s.backgroundsMu.RLock()
+	bc, ok := s.backgrounds[id]
+	s.backgroundsMu.RUnlock()
+	if !ok {
+		return false
+	}
+	if bc.IsDone() {
+		return false
+	}
+	bc.Cancel()
+	return true
 }
 
 func newPersistentShell(cwd string) *PersistentShell {
@@ -72,12 +285,11 @@ func newPersistentShell(cwd string) *PersistentShell {
 		shellPath = cfg.Shell.Path
 		shellArgs = cfg.Shell.Args
 	}
-
 	if shellPath == "" {
 		shellPath = os.Getenv("SHELL")
-		if shellPath == "" {
-			shellPath = "/bin/bash"
-		}
+	}
+	if shellPath == "" {
+		shellPath = "/bin/bash"
 	}
 
 	// Default shell args
@@ -85,18 +297,30 @@ func newPersistentShell(cwd string) *PersistentShell {
 		shellArgs = []string{"-l"}
 	}
 
-	cmd := exec.Command(shellPath, shellArgs...)
-	cmd.Dir = cwd
-
-	stdinPipe, err := cmd.StdinPipe()
-	if err != nil {
-		return nil
+	spawn := func(dir string) (*exec.Cmd, io.WriteCloser, bool) {
+		c := exec.Command(shellPath, shellArgs...)
+		c.Dir = dir
+		c.Env = append(os.Environ(), "GIT_EDITOR=true")
+		sp, err := c.StdinPipe()
+		if err != nil {
+			return nil, nil, false
+		}
+		if err := c.Start(); err != nil {
+			return nil, nil, false
+		}
+		return c, sp, true
 	}
 
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
-
-	err = cmd.Start()
-	if err != nil {
+	cmd, stdinPipe, ok := spawn(cwd)
+	started := ok
+	var spawnDir string
+	if !started && cwd != "" {
+		// The working directory may no longer exist (e.g. a deleted temp
+		// dir). Fall back to the current process working directory.
+		spawnDir = ""
+		cmd, stdinPipe, started = spawn(spawnDir)
+	}
+	if !started {
 		return nil
 	}
 
@@ -106,6 +330,7 @@ func newPersistentShell(cwd string) *PersistentShell {
 		isAlive:      true,
 		cwd:          cwd,
 		commandQueue: make(chan *commandExecution, 10),
+		backgrounds:  make(map[string]*BackgroundCommand),
 	}
 
 	go func() {
@@ -150,9 +375,9 @@ func (s *PersistentShell) execCommand(command string, timeout time.Duration, ctx
 
 	if !s.isAlive {
 		return commandResult{
-			stderr:   "Shell is not alive",
-			exitCode: 1,
-			err:      errors.New("shell is not alive"),
+			Stderr:   "Shell is not alive",
+			ExitCode: 1,
+			Err:      errors.New("shell is not alive"),
 		}
 	}
 
@@ -185,9 +410,9 @@ echo $EXEC_EXIT_CODE > %s
 	_, err := s.stdin.Write([]byte(fullCommand + "\n"))
 	if err != nil {
 		return commandResult{
-			stderr:   fmt.Sprintf("Failed to write command to shell: %v", err),
-			exitCode: 1,
-			err:      err,
+			Stderr:   fmt.Sprintf("Failed to write command to shell: %v", err),
+			ExitCode: 1,
+			Err:      err,
 		}
 	}
 
@@ -244,10 +469,10 @@ echo $EXEC_EXIT_CODE > %s
 	}
 
 	return commandResult{
-		stdout:      stdout,
-		stderr:      stderr,
-		exitCode:    exitCode,
-		interrupted: interrupted,
+		Stdout:      stdout,
+		Stderr:      stderr,
+		ExitCode:    exitCode,
+		Interrupted: interrupted,
 	}
 }
 
@@ -292,7 +517,7 @@ func (s *PersistentShell) Exec(ctx context.Context, command string, timeoutMs in
 	}
 
 	result := <-resultChan
-	return result.stdout, result.stderr, result.exitCode, result.interrupted, result.err
+	return result.Stdout, result.Stderr, result.ExitCode, result.Interrupted, result.Err
 }
 
 func (s *PersistentShell) Close() {
@@ -319,6 +544,12 @@ func readFileOrEmpty(path string) string {
 		return ""
 	}
 	return string(content)
+}
+
+// ReadFileOrEmpty reads a file and returns its contents, or "" on error.
+// Exported for use by other tools that need to read shell output files.
+func ReadFileOrEmpty(path string) string {
+	return readFileOrEmpty(path)
 }
 
 func fileExists(path string) bool {

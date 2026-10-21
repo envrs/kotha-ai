@@ -43,7 +43,7 @@ Subcommands: ask, cancel, summarize, sessions, session, messages, export, models
 func init() {
 	Cmd.PersistentFlags().StringVarP(&apiServer, "server", "s", "http://127.0.0.1:8080", "server base URL")
 	Cmd.PersistentFlags().StringVar(&apiAPIKey, "api-key", os.Getenv("KOTHA_API_KEY"), "API key for the server (env KOTHA_API_KEY)")
-	Cmd.AddCommand(askCmd, cancelCmd, summarizeCmd, sessionsCmd, sessionCmd, messagesCmd, exportCmd, modelsCmd, stopCmd, statusCmd)
+	Cmd.AddCommand(askCmd, cancelCmd, summarizeCmd, sessionsCmd, sessionCmd, messagesCmd, exportCmd, modelsCmd, stopCmd, statusCmd, diffCmd, recallCmd, shareCmd, costsCmd)
 }
 
 // Client wraps an HTTP server for the api subcommand.

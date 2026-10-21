@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/lrstanley/bubblezone"
 	"github.com/kothagpt/kotha/internal/app"
 	"github.com/kothagpt/kotha/internal/completions"
 	"github.com/kothagpt/kotha/internal/message"
@@ -52,6 +53,7 @@ var keyMap = ChatKeyMap{
 }
 
 func (p *chatPage) Init() tea.Cmd {
+	zone.NewGlobal() // Initialize bubblezone for clickable elements
 	cmds := []tea.Cmd{
 		p.layout.Init(),
 		p.completionDialog.Init(),

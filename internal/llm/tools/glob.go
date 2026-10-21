@@ -97,7 +97,7 @@ func (g *globTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		return NewTextErrorResponse("pattern is required"), nil
 	}
 
-	searchPath := params.Path
+	searchPath := fileutil.ExpandTilde(params.Path)
 	if searchPath == "" {
 		searchPath = config.WorkingDirectory()
 	}

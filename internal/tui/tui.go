@@ -36,6 +36,7 @@ type keyMap struct {
 	MCP             key.Binding
 	SwitchTheme     key.Binding
 	ConnectProvider key.Binding
+	DiffReview      key.Binding
 }
 
 type startCompactSessionMsg struct{}
@@ -89,6 +90,10 @@ var keys = keyMap{
 	ConnectProvider: key.NewBinding(
 		key.WithKeys("ctrl+p"),
 		key.WithHelp("ctrl+p", "connect provider"),
+	),
+	DiffReview: key.NewBinding(
+		key.WithKeys("ctrl+r"),
+		key.WithHelp("ctrl+r", "diff review"),
 	),
 }
 
@@ -667,6 +672,8 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.showFilepicker = !a.showFilepicker
 			a.filepicker.ToggleFilepicker(a.showFilepicker)
 			return a, nil
+		case key.Matches(msg, keys.DiffReview):
+			return a, a.moveToPage(page.DiffReviewPage)
 		}
 	default:
 		f, filepickerCmd := a.filepicker.Update(msg)
@@ -1060,10 +1067,11 @@ func New(app *app.App) tea.Model {
 		providerConnectDialog: dialog.NewProviderConnectCmp(),
 		app:                   app,
 		commands:              []dialog.Command{},
-		pages: map[page.PageID]tea.Model{
-			page.ChatPage: page.NewChatPage(app),
-			page.LogsPage: page.NewLogsPage(),
-		},
+pages: map[page.PageID]tea.Model{
+		page.ChatPage:      page.NewChatPage(app),
+		page.LogsPage:      page.NewLogsPage(),
+		page.DiffReviewPage: page.NewDiffReviewPage(app),
+	},
 		filepicker: dialog.NewFilepickerCmp(app),
 	}
 

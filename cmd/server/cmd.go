@@ -20,6 +20,7 @@ var (
 	serverTimeout time.Duration
 	serverDaemon  bool
 	serverPIDFile string
+	serverLogFile string
 )
 
 // Cmd is the `kotha server` subcommand that runs the background HTTP server.
@@ -69,6 +70,7 @@ func init() {
 	Cmd.Flags().DurationVar(&serverTimeout, "timeout", DefaultServerConfig().Timeout, "request timeout")
 	Cmd.Flags().BoolVar(&serverDaemon, "daemon", false, "run as a background daemon")
 	Cmd.Flags().StringVar(&serverPIDFile, "pidfile", "", "write daemon PID to file")
+	Cmd.Flags().StringVar(&serverLogFile, "log-file", "", "write daemon stdout/stderr to this file")
 }
 
 // runDaemon forks the server into the background and writes a PID file.
@@ -76,7 +78,6 @@ func runDaemon(cfg ServerConfig) error {
 	if serverPIDFile == "" {
 		return fmt.Errorf("--pidfile is required when --daemon is set")
 	}
-	// Re-exec ourselves detached from the terminal.
 	binary, err := os.Executable()
 	if err != nil {
 		return err
@@ -89,9 +90,19 @@ func runDaemon(cfg ServerConfig) error {
 	if cfg.Debug {
 		c.Args = append(c.Args, "--debug")
 	}
+	if serverLogFile != "" {
+		logFile, err := os.OpenFile(serverLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = logFile.Close() }()
+		c.Stdout = logFile
+		c.Stderr = logFile
+	} else {
+		c.Stdout = nil
+		c.Stderr = nil
+	}
 	c.Stdin = nil
-	c.Stdout = nil
-	c.Stderr = nil
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := c.Start(); err != nil {
 		return err

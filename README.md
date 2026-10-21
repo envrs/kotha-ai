@@ -61,3 +61,15 @@ You can configure MCP servers in `.kotha.json` under `mcpServers`. Kotha will su
 git clone https://github.com/kothagpt/kotha-ai.git
 cd kotha-ai
 make build
+```
+
+## Documentation
+
+- [Configuration Guide](docs/configuration.md)
+- [Architecture](docs/architecture.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [OpenAPI spec](openapi.yaml)
+
+## License
+
+MIT

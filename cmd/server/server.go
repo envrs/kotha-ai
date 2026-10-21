@@ -45,6 +45,9 @@ type Server struct {
 	srv   *http.Server
 	mu    sync.Mutex
 	start time.Time
+
+	shares   map[string]*share
+	sharesMu sync.RWMutex
 }
 
 // NewServer constructs a Server bound to the given config.
@@ -70,23 +73,30 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		return nil, err
 	}
 	srv := &Server{
-		cfg:   cfg,
-		app:   application,
-		start: time.Now(),
+		cfg:     cfg,
+		app:     application,
+		start:   time.Now(),
+		shares:  make(map[string]*share),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/sessions/{session_id}/ask", srv.handleAsk)
 	mux.HandleFunc("POST /v1/sessions/{session_id}/ask/stream", srv.handleAskStream)
+	mux.HandleFunc("POST /v1/sessions/{session_id}/ask/ws", srv.handleAskWebSocket)
 	mux.HandleFunc("POST /v1/sessions/{session_id}/cancel", srv.handleCancel)
 	mux.HandleFunc("POST /v1/sessions/{session_id}/summarize", srv.handleSummarize)
+	mux.HandleFunc("POST /v1/sessions/{session_id}/share", srv.handleShare)
 	mux.HandleFunc("GET /v1/sessions", srv.handleListSessions)
 	mux.HandleFunc("POST /v1/sessions", srv.handleCreateSession)
 	mux.HandleFunc("GET /v1/sessions/{session_id}", srv.handleGetSession)
 	mux.HandleFunc("DELETE /v1/sessions/{session_id}", srv.handleDeleteSession)
 	mux.HandleFunc("GET /v1/sessions/search", srv.handleSearchSessions)
+	mux.HandleFunc("GET /v1/sessions/diff", srv.handleDiffSessions)
+	mux.HandleFunc("GET /v1/recall", srv.handleRecall)
 	mux.HandleFunc("GET /v1/sessions/{session_id}/messages", srv.handleListMessages)
 	mux.HandleFunc("GET /v1/sessions/{session_id}/tool_calls", srv.handleListToolCalls)
 	mux.HandleFunc("GET /v1/sessions/{session_id}/export", srv.handleExportSession)
+	mux.HandleFunc("GET /v1/costs", srv.handleCost)
+	mux.HandleFunc("GET /v1/share/{share_id}", srv.handleGetSharedSession)
 	mux.HandleFunc("GET /v1/models", srv.handleCurrentModel)
 	mux.HandleFunc("PUT /v1/models", srv.handleUpdateModel)
 	mux.HandleFunc("GET /healthz", srv.handleHealth)

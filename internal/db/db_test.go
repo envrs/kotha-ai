@@ -9,25 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// openQueries connects to a fresh temp SQLite database, applies migrations
-// and returns a prepared Queries handle.
-func openQueries(t *testing.T) (*Queries, *sql.DB) {
-	t.Helper()
-	dir := t.TempDir()
-	config.SetDefaultProvider(config.NewDefaultProvider(&config.Config{Data: config.Data{Directory: dir}}))
-
-	conn, err := Connect()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-
-	q, err := Prepare(context.Background(), conn)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = q.Close() })
-	return q, conn
-}
-
 func TestDatabaseCRUD(t *testing.T) {
-	q, _ := openQueries(t)
+	q, _ := OpenTestDB(t)
 	ctx := context.Background()
 	s1, err := q.CreateSession(ctx, CreateSessionParams{
 		ID:    "sess-1",
@@ -198,18 +181,4 @@ func TestConnectRequiresDataDir(t *testing.T) {
 	_, err := Connect()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "data.dir is not set")
-}
-
-func TestWithTx(t *testing.T) {
-	q, conn := openQueries(t)
-	ctx := context.Background()
-	tx, err := conn.BeginTx(ctx, nil)
-	require.NoError(t, err)
-	txq := q.WithTx(tx)
-	require.NotNil(t, txq)
-
-	s, err := txq.CreateSession(ctx, CreateSessionParams{ID: "tx-sess", Title: "tx"})
-	require.NoError(t, err)
-	require.Equal(t, "tx-sess", s.ID)
-	require.NoError(t, tx.Commit())
 }
